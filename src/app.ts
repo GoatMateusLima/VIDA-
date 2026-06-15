@@ -18,31 +18,39 @@
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import routes from './routes';
 import { errorMiddleware } from './middlewares/errorMiddleware';
+import { AppError } from './middlewares/errorMiddleware';
+import { apiLimiter, requestContext } from './middlewares/securityMiddleware';
+import { corsOrigins, env } from './config/env';
 
 const app = express();
 
-// ─── Middlewares Globais ───────────────────────────────────────────────────────
-
-// Habilita CORS para todas as origens (ajuste para o domínio do frontend em produção)
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+app.disable('x-powered-by');
+app.set('trust proxy', env.TRUST_PROXY);
+app.use(requestContext);
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'same-site' },
 }));
 
-// Habilita leitura de corpo JSON nas requisições
-app.use(express.json());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origem não permitida pelo CORS'));
+  },
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 
-// ─── Rotas Centrais ────────────────────────────────────────────────────────────
-
-// Registra todas as rotas do projeto sob o prefixo /api
+app.use(express.json({ limit: '32kb' }));
+app.use(apiLimiter);
 app.use('/api', routes);
-
-// ─── Tratamento Global de Erros ───────────────────────────────────────────────
-
-// Deve ser o ÚLTIMO middleware registrado para capturar todos os erros
+app.use((_req, _res, next) => next(new AppError('Rota não encontrada.', 404)));
 app.use(errorMiddleware);
 
 export default app;

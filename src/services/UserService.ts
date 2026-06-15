@@ -15,8 +15,8 @@
  */
 
 import { supabase, supabaseAdmin } from '../config/database';
+import { env } from '../config/env';
 import { AppError } from '../middlewares/errorMiddleware';
-import { UserRole } from '../types';
 
 export class UserService {
   /**
@@ -29,14 +29,13 @@ export class UserService {
    * @param displayName - Nome de exibição na plataforma
    * @param role        - Cargo inicial do usuário (padrão: 'cadastrado')
    */
-  static async register(email: string, password: string, displayName: string, role: UserRole = 'cadastrado') {
+  static async register(email: string, password: string, displayName: string) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           display_name: displayName,
-          role: role, // Enviado para o trigger SQL via raw_user_meta_data
         },
       },
     });
@@ -46,6 +45,24 @@ export class UserService {
     }
 
     return data;
+  }
+
+  static async requestPasswordReset(email: string) {
+    const options = env.PASSWORD_RESET_REDIRECT_URL
+      ? { redirectTo: env.PASSWORD_RESET_REDIRECT_URL }
+      : undefined;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, options);
+    if (error) {
+      console.error('[Auth] Falha ao solicitar recuperação de senha:', error.message);
+    }
+  }
+
+  static async updatePassword(token: string, password: string) {
+    const client = clientWithToken(token);
+    const { error } = await client.auth.updateUser({ password });
+    if (error) {
+      throw new AppError('Não foi possível atualizar a senha.', 400);
+    }
   }
 
   /**

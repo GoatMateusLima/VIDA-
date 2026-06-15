@@ -19,6 +19,7 @@
 import { supabaseAdmin } from '../config/database';
 import { AppError } from '../middlewares/errorMiddleware';
 import { encryptMessage, decryptMessage } from '../utils/helpers';
+import { AuditService } from './AuditService';
 
 export class ConversationService {
   /**
@@ -75,7 +76,7 @@ export class ConversationService {
     // Controle de acesso: só participantes diretos ou papéis privilegiados podem ver
     const isParticipant = conversation.user_id === userId;
     const isAssignedVolunteer = conversation.volunteer_id === userId;
-    const isPrivileged = ['voluntario', 'moderador', 'administrador'].includes(role);
+    const isPrivileged = ['moderador', 'administrador'].includes(role);
 
     if (!isParticipant && !isAssignedVolunteer && !isPrivileged) {
       throw new AppError('Você não tem permissão para acessar este atendimento.', 403);
@@ -104,11 +105,11 @@ export class ConversationService {
    * @param senderId       - UUID do remetente
    * @param text           - Texto original da mensagem
    */
-  static async sendMessage(conversationId: string, senderId: string, text: string) {
+  static async sendMessage(conversationId: string, senderId: string, role: string, text: string) {
     // Valida que a conversa está ativa antes de permitir envio
     const { data: conversation, error: convErr } = await supabaseAdmin
       .from('conversations')
-      .select('status')
+      .select('status, user_id, volunteer_id')
       .eq('id', conversationId)
       .single();
 
@@ -118,6 +119,13 @@ export class ConversationService {
 
     if (conversation.status !== 'ativa') {
       throw new AppError('Você só pode enviar mensagens em conversas ativas.', 400);
+    }
+    const canSend =
+      conversation.user_id === senderId ||
+      conversation.volunteer_id === senderId ||
+      ['moderador', 'administrador'].includes(role);
+    if (!canSend) {
+      throw new AppError('Você não participa deste atendimento.', 403);
     }
 
     // Criptografa o conteúdo antes de persistir
@@ -144,7 +152,7 @@ export class ConversationService {
    * @param userId         - UUID de quem está encerrando
    * @param closedReason   - Ex: 'usuario_encerrou', 'voluntario_encerrou'
    */
-  static async close(conversationId: string, userId: string, closedReason: string) {
+  static async close(conversationId: string, userId: string, role: string, closedReason: string) {
     const { data: conversation, error: convErr } = await supabaseAdmin
       .from('conversations')
       .select('*')
@@ -153,6 +161,16 @@ export class ConversationService {
 
     if (convErr || !conversation) {
       throw new AppError('Atendimento não encontrado.', 404);
+    }
+    const canClose =
+      conversation.user_id === userId ||
+      conversation.volunteer_id === userId ||
+      ['moderador', 'administrador'].includes(role);
+    if (!canClose) {
+      throw new AppError('Você não participa deste atendimento.', 403);
+    }
+    if (['encerrada', 'arquivada'].includes(conversation.status)) {
+      throw new AppError('Este atendimento já foi encerrado.', 409);
     }
 
     const { data, error } = await supabaseAdmin
@@ -177,31 +195,36 @@ export class ConversationService {
    * @param volunteerId    - UUID do voluntário que está assumindo
    */
   static async accept(conversationId: string, volunteerId: string) {
-    const { data: conversation, error: convErr } = await supabaseAdmin
-      .from('conversations')
-      .select('status')
-      .eq('id', conversationId)
+    const { data: profile } = await supabaseAdmin
+      .from('volunteer_profiles')
+      .select('availability_status')
+      .eq('user_id', volunteerId)
       .single();
-
-    if (convErr || !conversation) {
-      throw new AppError('Atendimento não encontrado.', 404);
+    if (!profile || profile.availability_status !== 'online') {
+      throw new AppError('Defina sua disponibilidade como online antes de aceitar.', 409);
     }
 
-    // Previne dupla atribuição (race condition entre voluntários)
-    if (conversation.status !== 'aguardando') {
-      throw new AppError('Esta conversa já foi assumida ou foi encerrada.', 400);
-    }
-
+    const now = new Date().toISOString();
     const { data, error } = await supabaseAdmin
       .from('conversations')
-      .update({ status: 'ativa', volunteer_id: volunteerId, started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: 'ativa', volunteer_id: volunteerId, started_at: now, updated_at: now })
       .eq('id', conversationId)
+      .eq('status', 'aguardando')
+      .is('volunteer_id', null)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       throw new AppError('Erro ao aceitar atendimento: ' + error.message, 400);
     }
+    if (!data) {
+      throw new AppError('Este atendimento já foi assumido ou encerrado.', 409);
+    }
+
+    await supabaseAdmin
+      .from('volunteer_profiles')
+      .update({ availability_status: 'ocupado' })
+      .eq('user_id', volunteerId);
 
     return data;
   }
@@ -213,7 +236,7 @@ export class ConversationService {
   static async getQueue() {
     const { data, error } = await supabaseAdmin
       .from('conversations')
-      .select('*, users(display_name)')
+      .select('id, status, priority, created_at, users(display_name)')
       .eq('status', 'aguardando')
       .order('created_at', { ascending: true }); // FIFO: primeiro que chegou, primeiro atendido
 
@@ -221,7 +244,13 @@ export class ConversationService {
       throw new AppError('Erro ao buscar fila de atendimento: ' + error.message, 400);
     }
 
-    return data;
+    return (data || []).map((item: any, index: number) => ({
+      id: item.id,
+      status: item.status,
+      priority: item.priority,
+      created_at: item.created_at,
+      anonymous_name: `Pessoa aguardando ${index + 1}`,
+    }));
   }
 
   /**
@@ -236,6 +265,20 @@ export class ConversationService {
    * @param actionTaken    - Ação adotada (ex: 'orientei CVV 188')
    */
   static async flagRisk(conversationId: string, volunteerId: string, level: 'baixo' | 'medio' | 'alto' | 'imediato', reason: string, actionTaken?: string) {
+    const { data: conversation } = await supabaseAdmin
+      .from('conversations')
+      .select('volunteer_id, status')
+      .eq('id', conversationId)
+      .single();
+    if (!conversation) {
+      throw new AppError('Atendimento não encontrado.', 404);
+    }
+    if (conversation.volunteer_id !== volunteerId) {
+      throw new AppError('Somente o voluntário responsável pode sinalizar risco.', 403);
+    }
+    if (!['ativa', 'sinalizada'].includes(conversation.status)) {
+      throw new AppError('Não é possível sinalizar uma conversa encerrada.', 409);
+    }
     // 1. Cria o registro de sinalização de risco
     const { data: flag, error } = await supabaseAdmin
       .from('risk_flags')
@@ -257,6 +300,59 @@ export class ConversationService {
       })
       .eq('id', conversationId);
 
+    await AuditService.record(volunteerId, 'conversation.risk_flagged', 'conversation', conversationId, {
+      level,
+    });
     return flag;
+  }
+
+  static async history(userId: string, role: string, page: number, limit: number) {
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    let query = supabaseAdmin
+      .from('conversations')
+      .select('id, status, priority, started_at, ended_at, closed_reason, created_at, updated_at', {
+        count: 'exact',
+      });
+
+    if (!['moderador', 'administrador'].includes(role)) {
+      query = role === 'voluntario'
+        ? query.eq('volunteer_id', userId)
+        : query.eq('user_id', userId);
+    }
+
+    const { data, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) {
+      throw new AppError('Erro ao buscar histórico: ' + error.message, 400);
+    }
+    return { items: data || [], page, limit, total: count || 0 };
+  }
+
+  static async messagesAfter(
+    conversationId: string,
+    userId: string,
+    role: string,
+    after?: string
+  ) {
+    await this.getById(conversationId, userId, role);
+    let query = supabaseAdmin
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+    if (after) {
+      query = query.gt('created_at', after);
+    }
+    const { data, error } = await query.limit(100);
+    if (error) {
+      throw new AppError('Erro ao acompanhar mensagens.', 400);
+    }
+    return (data || []).map((message) => ({
+      ...message,
+      body: decryptMessage(message.body_encrypted),
+      body_encrypted: undefined,
+    }));
   }
 }

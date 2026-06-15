@@ -19,6 +19,7 @@ import userRoutes from './userRoutes';
 import conversationRoutes from './conversationRoutes';
 import reportRoutes from './reportRoutes';
 import adminRoutes from './adminRoutes';
+import notificationRoutes from './notificationRoutes';
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use('/users', userRoutes);          // GET /users/me, PATCH /users/me/pre
 router.use('/conversations', conversationRoutes); // Conversas, mensagens, fila, risco
 router.use('/reports', reportRoutes);      // POST /reports, GET+PATCH /admin/reports
 router.use('/admin', adminRoutes);         // Candidaturas e gestão de voluntários
+router.use('/notifications', notificationRoutes);
 
 export default router;

@@ -16,6 +16,7 @@
 
 import { supabaseAdmin } from '../config/database';
 import { AppError } from '../middlewares/errorMiddleware';
+import { AuditService } from './AuditService';
 
 export class VolunteerService {
   /**
@@ -27,6 +28,16 @@ export class VolunteerService {
    * @param experience - Experiências ou treinamentos anteriores
    */
   static async apply(userId: string, motivation: string, experience: string) {
+    const { data: existing } = await supabaseAdmin
+      .from('volunteer_applications')
+      .select('id, status')
+      .eq('user_id', userId)
+      .in('status', ['pendente', 'aprovada'])
+      .maybeSingle();
+    if (existing) {
+      throw new AppError('Você já possui uma candidatura ativa.', 409);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('volunteer_applications')
       .insert({ user_id: userId, status: 'pendente', motivation, experience })
@@ -85,6 +96,9 @@ export class VolunteerService {
     if (appError || !app) {
       throw new AppError('Candidatura não encontrada', 404);
     }
+    if (app.status !== 'pendente') {
+      throw new AppError('Esta candidatura já foi analisada.', 409);
+    }
 
     // 2. Marca a candidatura como aprovada com quem aprovou e quando
     const { error: updateAppErr } = await supabaseAdmin
@@ -117,6 +131,9 @@ export class VolunteerService {
       throw new AppError('Erro ao criar perfil de voluntário: ' + volErr.message, 400);
     }
 
+    await AuditService.record(reviewerId, 'volunteer.approved', 'volunteer_application', applicationId, {
+      user_id: app.user_id,
+    });
     return volProfile;
   }
 
@@ -126,7 +143,7 @@ export class VolunteerService {
    *
    * @param volunteerId - UUID do voluntário a ser suspenso
    */
-  static async suspendVolunteer(volunteerId: string) {
+  static async suspendVolunteer(volunteerId: string, actorId?: string) {
     // Reverte o cargo para 'cadastrado'
     const { error: userUpdateErr } = await supabaseAdmin
       .from('users')
@@ -147,6 +164,7 @@ export class VolunteerService {
       throw new AppError('Erro ao remover perfil de voluntário: ' + volDelErr.message, 400);
     }
 
+    await AuditService.record(actorId, 'volunteer.suspended', 'user', volunteerId);
     return { message: 'Voluntário suspenso com sucesso.' };
   }
 

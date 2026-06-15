@@ -26,6 +26,10 @@ const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY é obrigatória'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY é obrigatória'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  MESSAGE_ENCRYPTION_KEY: z.string().optional(),
+  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  PASSWORD_RESET_REDIRECT_URL: z.string().url().optional(),
 });
 
 // Tenta validar as variáveis — se falhar, mostra o erro e encerra o processo
@@ -36,5 +40,16 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-// Exporta as variáveis já validadas e tipadas para uso no resto da aplicação
+if (
+  parsed.data.NODE_ENV === 'production' &&
+  (!parsed.data.MESSAGE_ENCRYPTION_KEY ||
+    !/^[A-Za-z0-9+/]{43}=$/.test(parsed.data.MESSAGE_ENCRYPTION_KEY))
+) {
+  console.error('MESSAGE_ENCRYPTION_KEY deve ser uma chave Base64 de 32 bytes em produção.');
+  process.exit(1);
+}
+
 export const env = parsed.data;
+export const corsOrigins = env.CORS_ORIGINS.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);

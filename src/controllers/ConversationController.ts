@@ -44,6 +44,76 @@ export class ConversationController {
     }
   }
 
+  static async history(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        res.status(401).json({ status: 'error', message: 'Não autenticado' });
+        return;
+      }
+      const query = z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+      }).parse(req.query);
+      const data = await ConversationService.history(
+        req.user.id,
+        req.user.role,
+        query.page,
+        query.limit
+      );
+      res.status(200).json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async events(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    if (!req.user) {
+      res.status(401).json({ status: 'error', message: 'Não autenticado' });
+      return;
+    }
+
+    const conversationId = req.params.id;
+    const user = req.user;
+    let lastTimestamp = typeof req.query.after === 'string' ? req.query.after : undefined;
+    let closed = false;
+
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    res.write('retry: 3000\n\n');
+
+    const sendUpdates = async () => {
+      if (closed) return;
+      try {
+        const messages = await ConversationService.messagesAfter(
+          conversationId,
+          user.id,
+          user.role,
+          lastTimestamp
+        );
+        for (const message of messages) {
+          lastTimestamp = message.created_at;
+          res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);
+        }
+        res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
+      } catch (error) {
+        closed = true;
+        clearInterval(interval);
+        res.write(`event: error\ndata: ${JSON.stringify({ message: 'Canal encerrado.' })}\n\n`);
+        res.end();
+      }
+    };
+
+    const interval = setInterval(sendUpdates, 2500);
+    req.on('close', () => {
+      closed = true;
+      clearInterval(interval);
+    });
+    await sendUpdates();
+  }
+
   // Enviar mensagem
   static async sendMessage(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
@@ -54,11 +124,11 @@ export class ConversationController {
 
       const { id } = req.params;
       const schema = z.object({
-        text: z.string().min(1, 'A mensagem não pode ser vazia'),
+        text: z.string().trim().min(1, 'A mensagem não pode ser vazia').max(4000),
       });
 
       const body = schema.parse(req.body);
-      const data = await ConversationService.sendMessage(id, req.user.id, body.text);
+      const data = await ConversationService.sendMessage(id, req.user.id, req.user.role, body.text);
 
       res.status(201).json({
         status: 'success',
@@ -79,11 +149,11 @@ export class ConversationController {
 
       const { id } = req.params;
       const schema = z.object({
-        reason: z.string().min(1, 'O motivo de encerramento é obrigatório'),
+        reason: z.string().trim().min(1, 'O motivo de encerramento é obrigatório').max(100),
       });
 
       const body = schema.parse(req.body);
-      const data = await ConversationService.close(id, req.user.id, body.reason);
+      const data = await ConversationService.close(id, req.user.id, req.user.role, body.reason);
 
       res.status(200).json({
         status: 'success',

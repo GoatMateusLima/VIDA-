@@ -9,24 +9,40 @@
  *   - decryptMessage(encrypted) → Decodifica uma mensagem do banco para exibição
  *   - generateAnonymousNickname → Gera apelido anônimo amigável para usuários sem nome
  *
- * Nota sobre criptografia:
- *   A implementação atual usa Base64 com um salt fixo para fins de demonstração.
- *   Em um ambiente de produção real, substituir por AES-256 com chave rotacionada
- *   armazenada em um Vault (ex: Supabase Vault ou AWS Secrets Manager).
+ * As mensagens novas usam AES-256-GCM. O leitor mantém compatibilidade temporária
+ * com o formato Base64 legado para permitir migração gradual.
  */
+
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { env } from '../config/env';
 
 // ─── Criptografia de Mensagens ────────────────────────────────────────────────
 
-/**
- * Codifica uma mensagem de texto para ser salva no banco de dados.
- * O conteúdo é combinado com um salt e convertido para Base64.
- *
- * @param text - Texto original da mensagem
- * @returns String codificada em Base64 para armazenar no banco
- */
+const VERSION = 'v1';
+const LEGACY_SALT = 'vida_plus_secret_salt:';
+
+function encryptionKey(): Buffer {
+  if (env.MESSAGE_ENCRYPTION_KEY) {
+    const key = Buffer.from(env.MESSAGE_ENCRYPTION_KEY, 'base64');
+    if (key.length !== 32) {
+      throw new Error('MESSAGE_ENCRYPTION_KEY deve conter exatamente 32 bytes.');
+    }
+    return key;
+  }
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error('MESSAGE_ENCRYPTION_KEY não configurada.');
+  }
+
+  return createHash('sha256').update('vida-plus-development-only-key').digest();
+}
+
 export function encryptMessage(text: string): string {
-  const secretSalt = 'vida_plus_secret_salt:';
-  return Buffer.from(secretSalt + text).toString('base64');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [VERSION, iv.toString('base64'), tag.toString('base64'), ciphertext.toString('base64')].join('.');
 }
 
 /**
@@ -38,14 +54,29 @@ export function encryptMessage(text: string): string {
  */
 export function decryptMessage(encryptedText: string): string {
   try {
-    const decoded = Buffer.from(encryptedText, 'base64').toString('utf-8');
-    const secretSalt = 'vida_plus_secret_salt:';
-    if (decoded.startsWith(secretSalt)) {
-      return decoded.replace(secretSalt, '');
+    if (encryptedText.startsWith(`${VERSION}.`)) {
+      const [, ivEncoded, tagEncoded, ciphertextEncoded] = encryptedText.split('.');
+      if (!ivEncoded || !tagEncoded || !ciphertextEncoded) {
+        throw new Error('Formato criptografado inválido.');
+      }
+      const decipher = createDecipheriv(
+        'aes-256-gcm',
+        encryptionKey(),
+        Buffer.from(ivEncoded, 'base64')
+      );
+      decipher.setAuthTag(Buffer.from(tagEncoded, 'base64'));
+      return Buffer.concat([
+        decipher.update(Buffer.from(ciphertextEncoded, 'base64')),
+        decipher.final(),
+      ]).toString('utf8');
     }
-    return decoded;
-  } catch (error) {
-    // Retorna mensagem segura em caso de falha (não expõe detalhes internos)
+
+    const decoded = Buffer.from(encryptedText, 'base64').toString('utf-8');
+    if (decoded.startsWith(LEGACY_SALT)) {
+      return decoded.slice(LEGACY_SALT.length);
+    }
+    throw new Error('Formato legado inválido.');
+  } catch {
     return '[Mensagem ilegível ou erro de descriptografia]';
   }
 }
@@ -61,4 +92,11 @@ export function decryptMessage(encryptedText: string): string {
 export function generateAnonymousNickname(): string {
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   return `Apoiado #${randomNum}`;
+}
+
+export function hashPrivateValue(value: string): string {
+  return createHash('sha256')
+    .update(encryptionKey())
+    .update(value)
+    .digest('hex');
 }

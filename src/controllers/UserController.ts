@@ -24,6 +24,7 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { UserService } from '../services/UserService';
 import { AuthenticatedRequest } from '../types';
+import { hashPrivateValue } from '../utils/helpers';
 
 export class UserController {
   /**
@@ -38,13 +39,16 @@ export class UserController {
       // Valida os dados de entrada com Zod antes de qualquer processamento
       const schema = z.object({
         email: z.string().email('E-mail inválido'),
-        password: z.string().min(6, 'A senha precisa de pelo menos 6 caracteres'),
-        displayName: z.string().min(2, 'Nome muito curto'),
-        role: z.enum(['anonimo', 'cadastrado', 'voluntario', 'moderador', 'administrador']).optional(),
+        password: z.string()
+          .min(10, 'A senha precisa de pelo menos 10 caracteres')
+          .regex(/[a-z]/, 'A senha precisa de uma letra minúscula')
+          .regex(/[A-Z]/, 'A senha precisa de uma letra maiúscula')
+          .regex(/[0-9]/, 'A senha precisa de um número'),
+        displayName: z.string().trim().min(2, 'Nome muito curto').max(100),
       });
 
       const body = schema.parse(req.body);
-      const data = await UserService.register(body.email, body.password, body.displayName, body.role);
+      const data = await UserService.register(body.email, body.password, body.displayName);
 
       res.status(201).json({
         status: 'success',
@@ -53,6 +57,32 @@ export class UserController {
       });
     } catch (error) {
       next(error); // Repassa para o errorMiddleware tratar e formatar
+    }
+  }
+
+  static async requestPasswordReset(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const body = z.object({ email: z.string().email() }).parse(req.body);
+      await UserService.requestPasswordReset(body.email);
+      res.status(200).json({
+        status: 'success',
+        message: 'Se o e-mail estiver cadastrado, você receberá as instruções de recuperação.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updatePassword(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const token = req.headers.authorization?.split(' ')[1] || '';
+      const body = z.object({
+        password: z.string().min(10).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/),
+      }).parse(req.body);
+      await UserService.updatePassword(token, body.password);
+      res.status(200).json({ status: 'success', message: 'Senha atualizada com sucesso.' });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -138,11 +168,11 @@ export class UserController {
       }
 
       const schema = z.object({
-        nickname: z.string().optional(),
-        birth_year: z.number().optional(),
-        state: z.string().max(2).optional(),
-        preferences_json: z.any().optional(),
-      });
+        nickname: z.string().trim().min(2).max(50).optional(),
+        birth_year: z.number().int().min(1900).max(new Date().getFullYear() - 13).optional(),
+        state: z.string().trim().length(2).transform((value) => value.toUpperCase()).optional(),
+        preferences_json: z.record(z.unknown()).optional(),
+      }).strict();
 
       const body = schema.parse(req.body);
       const data = await UserService.updateProfile(req.user.id, body);
@@ -174,12 +204,13 @@ export class UserController {
       }
 
       const schema = z.object({
-        type: z.string().min(1, 'Tipo de consentimento é obrigatório'),
-        version: z.string().min(1, 'Versão do documento é obrigatória'),
+        type: z.enum(['termos_de_uso', 'politica_privacidade', 'comunicacoes']),
+        version: z.string().trim().regex(/^\d+\.\d+(\.\d+)?$/, 'Versão inválida'),
       });
 
       const body = schema.parse(req.body);
-      const data = await UserService.registerConsent(req.user.id, body.type, body.version, req.ip);
+      const ipHash = req.ip ? hashPrivateValue(req.ip) : undefined;
+      const data = await UserService.registerConsent(req.user.id, body.type, body.version, ipHash);
 
       res.status(200).json({
         status: 'success',

@@ -39,6 +39,8 @@ router.get('/volunteer/dashboard',
 
 // ─── Rotas do Usuário ─────────────────────────────────────────────────────────
 router.post('/', requireAuth, ConversationController.create);               // Entrar na fila
+router.get('/', requireAuth, ConversationController.history);
+router.get('/:id/events', requireAuth, ConversationController.events);
 router.get('/:id', requireAuth, ConversationController.getById);            // Ver conversa + mensagens
 router.post('/:id/messages', requireAuth, ConversationController.sendMessage); // Enviar mensagem
 router.post('/:id/close', requireAuth, ConversationController.close);       // Encerrar atendimento

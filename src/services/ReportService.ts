@@ -16,6 +16,7 @@
 
 import { supabaseAdmin } from '../config/database';
 import { AppError } from '../middlewares/errorMiddleware';
+import { AuditService } from './AuditService';
 
 export class ReportService {
   /**
@@ -41,9 +42,13 @@ export class ReportService {
 
     // 2. Cria automaticamente o caso de moderação associado (status 'aberto')
     // Isso notifica a equipe de moderação que há um caso pendente para análise
-    await supabaseAdmin
+    const { error: caseError } = await supabaseAdmin
       .from('moderation_cases')
       .insert({ report_id: report.id, status: 'aberto' });
+    if (caseError) {
+      await supabaseAdmin.from('reports').delete().eq('id', report.id);
+      throw new AppError('Erro ao abrir caso de moderação.', 500);
+    }
 
     return report;
   }
@@ -110,6 +115,7 @@ export class ReportService {
       throw new AppError('Erro ao atualizar denúncia: ' + reportErr.message, 400);
     }
 
+    await AuditService.record(assignedTo, 'report.reviewed', 'report', reportId, { status });
     return updatedReport;
   }
 }

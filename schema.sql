@@ -23,8 +23,8 @@ CREATE TABLE public.users (
 -- Habilitar RLS (Row Level Security) na tabela users
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- Criar políticas de acesso simples para começar (Bypass seguro via backend)
-CREATE POLICY "Permitir leitura de usuários" ON public.users FOR SELECT USING (true);
+-- O backend usa service_role. Clientes autenticados só acessam o próprio cadastro.
+CREATE POLICY "Usuário lê o próprio cadastro" ON public.users FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Permitir atualização pelo próprio usuário ou admin" ON public.users FOR UPDATE USING (auth.uid() = id);
 
 -- 3. PERFIS DE USUÁRIOS
@@ -38,7 +38,9 @@ CREATE TABLE public.user_profiles (
 );
 
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permitir leitura de perfis" ON public.user_profiles FOR SELECT USING (true);
+ALTER TABLE public.user_profiles ADD CONSTRAINT user_profiles_birth_year_check
+  CHECK (birth_year IS NULL OR birth_year BETWEEN 1900 AND EXTRACT(YEAR FROM CURRENT_DATE)::int - 13);
+CREATE POLICY "Usuário lê o próprio perfil" ON public.user_profiles FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Permitir modificação do próprio perfil" ON public.user_profiles FOR ALL USING (auth.uid() = user_id);
 
 -- 4. TERMOS E CONSENTIMENTOS (LGPD)
@@ -82,7 +84,9 @@ CREATE TABLE public.volunteer_profiles (
 );
 
 ALTER TABLE public.volunteer_profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Leitura pública de perfis de voluntário" ON public.volunteer_profiles FOR SELECT USING (true);
+ALTER TABLE public.volunteer_profiles ADD CONSTRAINT volunteer_profiles_availability_check
+  CHECK (availability_status IN ('online', 'ocupado', 'offline'));
+CREATE POLICY "Voluntário lê o próprio perfil" ON public.volunteer_profiles FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Atualização do próprio status de voluntário" ON public.volunteer_profiles FOR UPDATE USING (auth.uid() = user_id);
 
 -- 7. CONVERSAS (FILA E SALA DE ATENDIMENTO)
@@ -101,6 +105,10 @@ CREATE TABLE public.conversations (
 
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 CREATE INDEX idx_conversations_queue ON public.conversations(status, created_at) WHERE status = 'aguardando';
+CREATE UNIQUE INDEX uq_conversations_open_per_user ON public.conversations(user_id)
+  WHERE status IN ('aguardando', 'ativa', 'sinalizada');
+CREATE INDEX idx_conversations_volunteer_history ON public.conversations(volunteer_id, created_at DESC)
+  WHERE volunteer_id IS NOT NULL;
 
 CREATE POLICY "Usuário acessa suas próprias conversas" ON public.conversations 
     FOR ALL USING (auth.uid() = user_id OR auth.uid() = volunteer_id);
@@ -117,6 +125,7 @@ CREATE TABLE public.messages (
 );
 
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ADD CONSTRAINT messages_type_check CHECK (type IN ('text', 'system', 'media'));
 CREATE INDEX idx_messages_timeline ON public.messages(conversation_id, created_at);
 
 CREATE POLICY "Participantes acessam as mensagens da conversa" ON public.messages 
@@ -139,6 +148,13 @@ CREATE TABLE public.risk_flags (
 );
 
 ALTER TABLE public.risk_flags ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Participante visualiza sinalizações" ON public.risk_flags FOR SELECT USING (
+    EXISTS (
+        SELECT 1 FROM public.conversations c
+        WHERE c.id = conversation_id
+          AND (c.user_id = auth.uid() OR c.volunteer_id = auth.uid())
+    )
+);
 
 -- 10. DENÚNCIAS (Reports)
 CREATE TABLE public.reports (
@@ -154,6 +170,8 @@ CREATE TABLE public.reports (
 
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Qualquer usuário logado pode denunciar" ON public.reports FOR INSERT WITH CHECK (auth.uid() = reporter_id);
+CREATE POLICY "Autor visualiza a própria denúncia" ON public.reports FOR SELECT USING (auth.uid() = reporter_id);
+CREATE INDEX idx_reports_status_created ON public.reports(status, created_at DESC);
 
 -- 11. CASOS DE MODERAÇÃO
 CREATE TABLE public.moderation_cases (
@@ -206,6 +224,7 @@ CREATE TABLE public.notifications (
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Apenas próprio usuário gerencia suas notificações" ON public.notifications FOR ALL USING (auth.uid() = user_id);
+CREATE INDEX idx_notifications_user_status ON public.notifications(user_id, status, sent_at DESC);
 
 -- 15. ASSINATURAS PUSH PWA
 CREATE TABLE public.push_subscriptions (
@@ -232,6 +251,7 @@ CREATE TABLE public.audit_logs (
 );
 
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+CREATE INDEX idx_audit_logs_entity ON public.audit_logs(entity_type, entity_id, created_at DESC);
 
 -- ==========================================
 -- TRIGGERS DE INTEGRAÇÃO COM AUTH.USERS DO SUPABASE
@@ -244,8 +264,8 @@ BEGIN
   INSERT INTO public.users (id, display_name, role)
   VALUES (
     new.id,
-    COALESCE(new.raw_user_meta_data->>'display_name', 'Usuário Apoiado'),
-    COALESCE((new.raw_user_meta_data->>'role')::public.user_role, 'cadastrado'::public.user_role)
+    LEFT(COALESCE(NULLIF(new.raw_user_meta_data->>'display_name', ''), 'Usuário Apoiado'), 100),
+    'cadastrado'::public.user_role
   );
   
   INSERT INTO public.user_profiles (user_id, nickname)
@@ -256,8 +276,15 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

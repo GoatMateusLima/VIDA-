@@ -54,6 +54,7 @@ export const errorMiddleware: ErrorRequestHandler = (
     res.status(err.statusCode).json({
       status: 'error',
       message: err.message,
+      requestId: res.locals.requestId,
     });
     return;
   }
@@ -64,6 +65,7 @@ export const errorMiddleware: ErrorRequestHandler = (
       status: 'error',
       message: 'Erro de validação nos dados fornecidos',
       errors: err.errors, // Lista detalhada dos campos inválidos
+      requestId: res.locals.requestId,
     });
     return;
   }
@@ -73,6 +75,7 @@ export const errorMiddleware: ErrorRequestHandler = (
     res.status(500).json({
       status: 'error',
       message: 'Erro de comunicação com o banco de dados.',
+      requestId: res.locals.requestId,
     });
     return;
   }
@@ -81,5 +84,6 @@ export const errorMiddleware: ErrorRequestHandler = (
   res.status(500).json({
     status: 'error',
     message: 'Erro interno do servidor. Por favor, tente novamente mais tarde.',
+    requestId: res.locals.requestId,
   });
 };

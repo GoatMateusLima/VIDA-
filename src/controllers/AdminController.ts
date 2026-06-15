@@ -7,7 +7,9 @@ export class AdminController {
   // Obter candidaturas de voluntários (Apenas Admin)
   static async listVolunteerApplications(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const status = req.query.status as 'pendente' | 'aprovada' | 'rejeitada' | undefined;
+      const { status } = z.object({
+        status: z.enum(['pendente', 'aprovada', 'rejeitada']).optional(),
+      }).parse(req.query);
       const data = await VolunteerService.listApplications(status);
 
       res.status(200).json({
@@ -70,7 +72,7 @@ export class AdminController {
   static async suspendVolunteer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params; // ID do voluntário (user_id)
-      const data = await VolunteerService.suspendVolunteer(id);
+      const data = await VolunteerService.suspendVolunteer(id, req.user?.id);
 
       res.status(200).json({
         status: 'success',

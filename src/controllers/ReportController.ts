@@ -35,7 +35,9 @@ export class ReportController {
   // Listar denúncias (Apenas Moderador/Admin)
   static async list(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const status = req.query.status as string | undefined;
+      const { status } = z.object({
+        status: z.enum(['pendente', 'em_analise', 'resolvido', 'arquivado']).optional(),
+      }).parse(req.query);
       const data = await ReportService.list(status);
 
       res.status(200).json({

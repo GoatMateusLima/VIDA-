@@ -1,8 +1,8 @@
 # Arquitetura do Projeto VIDA+
 
-Projeto backend Node.js com **TypeScript** estruturado em camadas MVC
-(Model - View - Controller) com camadas adicionais de Service, Middleware,
-Routes, Config, Types e Utils.
+Projeto backend Node.js com **TypeScript** estruturado em camadas de
+Controller, Service, Middleware, Routes, Config, Types e Utils. A persistência
+é acessada pelos Services por meio dos clientes do Supabase.
 
 ---
 
@@ -10,21 +10,18 @@ Routes, Config, Types e Utils.
 
 ```
 VIDA+/
-├── server.ts
 ├── package.json
 ├── tsconfig.json
 ├── .env
 ├── .gitignore
 └── src/
     ├── app.ts
+    ├── server.ts
     ├── config/
     │   ├── database.ts
     │   └── env.ts
     ├── controllers/
     │   └── UserController.ts
-    ├── models/
-    │   └── UserModel.ts
-    ├── views/
     ├── routes/
     │   ├── index.ts
     │   └── userRoutes.ts
@@ -41,9 +38,9 @@ VIDA+/
 
 ---
 
-## Arquivos Raiz
+## Arquivos Principais
 
-### `server.ts`
+### `src/server.ts`
 Ponto de entrada da aplicação. Responsável por iniciar o servidor HTTP,
 definir a porta e conectar ao banco de dados. É o primeiro arquivo executado
 quando a aplicação sobe. Em TypeScript, os tipos do Node.js são fornecidos
@@ -94,25 +91,6 @@ Centraliza as configurações globais da aplicação com tipagem segura.
 
 ---
 
-### `src/models/` — Camada M do MVC
-Define a estrutura dos dados e a comunicação direta com o banco de dados.
-Em TypeScript, os models são fortemente tipados com interfaces ou classes.
-
-- **`UserModel.ts`** — Representa a entidade User no banco. Define o schema,
-  campos, tipos, validações e relacionamentos. Interfaces TypeScript garantem
-  consistência entre o modelo e o restante da aplicação.
-
-> Cada entidade do sistema terá seu próprio Model nesta pasta.
-
----
-
-### `src/views/` — Camada V do MVC
-Em APIs REST, a view é a resposta JSON enviada ao cliente. Esta pasta pode
-conter serializers ou DTOs (Data Transfer Objects) tipados, garantindo que
-os dados retornados sigam um contrato consistente com o cliente.
-
----
-
 ### `src/controllers/` — Camada C do MVC
 Recebe as requisições HTTP tipadas (`Request`, `Response` do Express),
 extrai os dados da request e chama o Service correspondente. Monta e envia
@@ -122,7 +100,7 @@ a resposta HTTP após receber o resultado.
   Contém métodos como `create`, `findAll`, `findById`, `update`, `delete`,
   todos com parâmetros e retornos tipados. Não contém regras de negócio.
 
-> Regra: Controller não acessa Model diretamente, sempre passa pelo Service.
+> Regra: Controller não acessa o banco diretamente, sempre passa pelo Service.
 
 ---
 
@@ -132,7 +110,7 @@ Torna o código mais testável, reutilizável e fácil de tipar.
 
 - **`UserService.ts`** — Contém a lógica de negócio do User com tipos
   explícitos nos parâmetros e retornos. Valida dados, aplica regras de
-  negócio, acessa o Model para persistir ou consultar dados. O TypeScript
+  negócio e acessa o Supabase para persistir ou consultar dados. O TypeScript
   garante que os dados manipulados aqui sejam sempre do tipo esperado.
 
 > É aqui que mora o "cérebro" da aplicação.

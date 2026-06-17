@@ -24,6 +24,7 @@ const router = Router();
 
 router.post('/register', authLimiter, UserController.register);
 router.post('/login', authLimiter, UserController.login);
+router.post('/anonymous', authLimiter, UserController.anonymous);
 router.post('/password/reset', authLimiter, UserController.requestPasswordReset);
 router.post('/password/update', authLimiter, requireAuth, UserController.updatePassword);
 router.post('/logout', requireAuth, UserController.logout);  // Logout (invalida token)

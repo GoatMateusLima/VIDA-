@@ -84,6 +84,18 @@ export class UserService {
     return data;
   }
 
+  static async signInAnonymously() {
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error || !data.user) {
+      throw new AppError('Acesso anônimo indisponível no momento.', 400);
+    }
+    await supabaseAdmin
+      .from('users')
+      .update({ role: 'anonimo', display_name: 'Pessoa anônima' })
+      .eq('id', data.user.id);
+    return data;
+  }
+
   /**
    * Encerra a sessão do usuário no Supabase (invalida o access_token).
    *

@@ -110,3 +110,23 @@ export interface Report {
   status: 'pendente' | 'em_analise' | 'resolvido' | 'arquivado';
   created_at: string;
 }
+
+export interface Community {
+  id: string;
+  name: string;
+  description?: string;
+  status: string;
+  rules_json: string[];
+  created_at: string;
+}
+
+export interface CommunityMessage {
+  id: string;
+  community_id: string;
+  sender_id: string;
+  alias_snapshot: string;
+  body_encrypted: string;
+  created_at: string;
+  edited_at?: string;
+  deleted_at?: string;
+}

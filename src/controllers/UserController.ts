@@ -113,6 +113,17 @@ export class UserController {
     }
   }
 
+  static async anonymous(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await UserService.signInAnonymously();
+      res.status(201).json({
+        status: 'success',
+        message: 'Sessão pseudônima criada.',
+        data: { session: data.session, user: data.user },
+      });
+    } catch (error) { next(error); }
+  }
+
   /**
    * Encerra a sessão do usuário, invalidando o token no Supabase.
    * O token é extraído do header Authorization da requisição.

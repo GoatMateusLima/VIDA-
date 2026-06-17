@@ -3,7 +3,7 @@
 
 BEGIN;
 
--- Impede mais de um atendimento aberto por usuário.
+-- Impede mais de um atendimento aberto por usuario.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_conversations_open_per_user
   ON public.conversations(user_id)
   WHERE status IN ('aguardando', 'ativa', 'sinalizada');
@@ -38,7 +38,7 @@ ALTER TABLE public.messages
 ALTER TABLE public.messages
   ADD CONSTRAINT messages_type_check CHECK (type IN ('text', 'system', 'media'));
 
--- O papel inicial nunca é aceito do metadata enviado pelo cliente.
+-- O papel inicial nunca e aceito do metadata enviado pelo cliente.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -49,7 +49,7 @@ BEGIN
   INSERT INTO public.users (id, display_name, role)
   VALUES (
     new.id,
-    LEFT(COALESCE(NULLIF(new.raw_user_meta_data->>'display_name', ''), 'Usuário Apoiado'), 100),
+    LEFT(COALESCE(NULLIF(new.raw_user_meta_data->>'display_name', ''), 'Usuario Apoiado'), 100),
     'cadastrado'::public.user_role
   );
 
@@ -59,23 +59,23 @@ BEGIN
 END;
 $$;
 
--- Revoga políticas públicas excessivas. O backend usa service_role e ignora RLS.
-DROP POLICY IF EXISTS "Permitir leitura de usuários" ON public.users;
-CREATE POLICY "Usuário lê o próprio cadastro"
+-- Revoga politicas publicas excessivas. O backend usa service_role e ignora RLS.
+DROP POLICY IF EXISTS "Permitir leitura de usuarios" ON public.users;
+CREATE POLICY "Usuario le o proprio cadastro"
   ON public.users FOR SELECT
   USING (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Permitir leitura de perfis" ON public.user_profiles;
-CREATE POLICY "Usuário lê o próprio perfil"
+CREATE POLICY "Usuario le o proprio perfil"
   ON public.user_profiles FOR SELECT
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Leitura pública de perfis de voluntário" ON public.volunteer_profiles;
-CREATE POLICY "Voluntário lê o próprio perfil"
+DROP POLICY IF EXISTS "Leitura publica de perfis de voluntario" ON public.volunteer_profiles;
+CREATE POLICY "Voluntario le o proprio perfil"
   ON public.volunteer_profiles FOR SELECT
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Participante visualiza sinalizações"
+CREATE POLICY "Participante visualiza sinalizacoes"
   ON public.risk_flags FOR SELECT
   USING (
     EXISTS (
@@ -85,11 +85,11 @@ CREATE POLICY "Participante visualiza sinalizações"
     )
   );
 
-CREATE POLICY "Autor visualiza a própria denúncia"
+CREATE POLICY "Autor visualiza a propria denuncia"
   ON public.reports FOR SELECT
   USING (reporter_id = auth.uid());
 
--- Habilita eventos de mensagens para uso futuro, sem conceder leitura além do RLS.
+-- Habilita eventos de mensagens para uso futuro, sem conceder leitura alem do RLS.
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;

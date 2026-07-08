@@ -14,42 +14,48 @@
  *   - `supabaseAdmin`: usado para leitura/escrita nas tabelas públicas (ignora RLS)
  */
 
-import { supabase, supabaseAdmin } from '../config/database';
-import { env } from '../config/env';
-import { AppError } from '../middlewares/errorMiddleware';
-import { UserRole } from '../types';
+import { randomUUID } from "crypto";
+import { supabase, supabaseAdmin } from "../config/database";
+import { env } from "../config/env";
+import { AppError } from "../middlewares/errorMiddleware";
+import { UserRole } from "../types";
 
 export class UserService {
   static async listUsers() {
     const { data: users, error } = await supabaseAdmin
-      .from('users')
-      .select('id, display_name, role, status, created_at, updated_at')
-      .order('created_at', { ascending: false });
+      .from("users")
+      .select("id, display_name, role, status, created_at, updated_at")
+      .order("created_at", { ascending: false });
 
     if (error) {
-      throw new AppError('Erro ao listar usuarios: ' + error.message, 400);
+      throw new AppError("Erro ao listar usuarios: " + error.message, 400);
     }
 
-    return Promise.all((users || []).map(async (user) => {
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
-      return { ...user, email: authUser.user?.email || '' };
-    }));
+    return Promise.all(
+      (users || []).map(async (user) => {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(
+          user.id,
+        );
+        return { ...user, email: authUser.user?.email || "" };
+      }),
+    );
   }
 
-  static async updateRole(userId: string, role: Exclude<UserRole, 'anonimo'>) {
+  static async updateRole(userId: string, role: Exclude<UserRole, "anonimo">) {
     const { data, error } = await supabaseAdmin
-      .from('users')
+      .from("users")
       .update({ role, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-      .select('id, display_name, role, status, created_at, updated_at')
+      .eq("id", userId)
+      .select("id, display_name, role, status, created_at, updated_at")
       .single();
 
     if (error || !data) {
-      throw new AppError('Erro ao atualizar papel do usuario.', 400);
+      throw new AppError("Erro ao atualizar papel do usuario.", 400);
     }
 
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-    return { ...data, email: authUser.user?.email || '' };
+    const { data: authUser } =
+      await supabaseAdmin.auth.admin.getUserById(userId);
+    return { ...data, email: authUser.user?.email || "" };
   }
 
   /**
@@ -63,21 +69,34 @@ export class UserService {
    * @param role        - Cargo inicial do usuário (padrão: 'cadastrado')
    */
   static async register(email: string, password: string, displayName: string) {
-    const { data, error } = await supabase.auth.signUp({
+    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      options: {
-        data: {
-          display_name: displayName,
-        },
+      email_confirm: true,
+      user_metadata: {
+        display_name: displayName,
       },
     });
 
-    if (error) {
-      throw new AppError(error.message, 400);
+    if (error || !created.user) {
+      throw new AppError(
+        error?.message || "Nao foi possivel criar o usuario.",
+        400,
+      );
     }
 
-    return data;
+    await supabaseAdmin.from("users").upsert({
+      id: created.user.id,
+      display_name: displayName,
+      role: "cadastrado",
+      status: "ativo",
+      updated_at: new Date().toISOString(),
+    });
+    await supabaseAdmin
+      .from("user_profiles")
+      .upsert({ user_id: created.user.id });
+
+    return this.login(email, password);
   }
 
   static async requestPasswordReset(email: string) {
@@ -86,7 +105,10 @@ export class UserService {
       : undefined;
     const { error } = await supabase.auth.resetPasswordForEmail(email, options);
     if (error) {
-      console.error('[Auth] Falha ao solicitar recuperação de senha:', error.message);
+      console.error(
+        "[Auth] Falha ao solicitar recuperação de senha:",
+        error.message,
+      );
     }
   }
 
@@ -94,7 +116,7 @@ export class UserService {
     const client = clientWithToken(token);
     const { error } = await client.auth.updateUser({ password });
     if (error) {
-      throw new AppError('Não foi possível atualizar a senha.', 400);
+      throw new AppError("Não foi possível atualizar a senha.", 400);
     }
   }
 
@@ -111,22 +133,34 @@ export class UserService {
 
     if (error) {
       // Mensagem genérica para não revelar se o e-mail existe ou não
-      throw new AppError('Credenciais inválidas. Verifique seu e-mail e senha.', 401);
+      throw new AppError(
+        "Credenciais inválidas. Verifique seu e-mail e senha.",
+        401,
+      );
     }
 
     return data;
   }
 
   static async signInAnonymously() {
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error || !data.user) {
-      throw new AppError('Acesso anônimo indisponível no momento.', 400);
+    const email = `anon-${randomUUID()}@anonymous.vida.local`;
+    const password = `Anon${randomUUID()}1a`;
+    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        display_name: "Pessoa anônima",
+      },
+    });
+    if (error || !created.user) {
+      throw new AppError("Acesso anônimo indisponível no momento.", 400);
     }
     await supabaseAdmin
-      .from('users')
-      .update({ role: 'anonimo', display_name: 'Pessoa anônima' })
-      .eq('id', data.user.id);
-    return data;
+      .from("users")
+      .update({ role: "anonimo", display_name: "Pessoa anônima" })
+      .eq("id", created.user.id);
+    return this.login(email, password);
   }
 
   /**
@@ -150,20 +184,20 @@ export class UserService {
    */
   static async getProfile(userId: string) {
     const { data: user, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('id', userId)
+      .from("users")
+      .select("*")
+      .eq("id", userId)
       .single();
 
     if (userError || !user) {
-      throw new AppError('Usuário não encontrado', 404);
+      throw new AppError("Usuário não encontrado", 404);
     }
 
     // Busca o perfil adicional (pode ser nulo se o usuário for muito novo)
     const { data: profile } = await supabaseAdmin
-      .from('user_profiles')
-      .select('*')
-      .eq('user_id', userId)
+      .from("user_profiles")
+      .select("*")
+      .eq("user_id", userId)
       .single();
 
     return {
@@ -179,9 +213,17 @@ export class UserService {
    * @param userId  - UUID do usuário
    * @param updates - Campos a atualizar na tabela user_profiles
    */
-  static async updateProfile(userId: string, updates: { nickname?: string; birth_year?: number; state?: string; preferences_json?: any }) {
+  static async updateProfile(
+    userId: string,
+    updates: {
+      nickname?: string;
+      birth_year?: number;
+      state?: string;
+      preferences_json?: any;
+    },
+  ) {
     const { data, error } = await supabaseAdmin
-      .from('user_profiles')
+      .from("user_profiles")
       .update({
         nickname: updates.nickname,
         birth_year: updates.birth_year,
@@ -189,12 +231,12 @@ export class UserService {
         preferences_json: updates.preferences_json,
         updated_at: new Date().toISOString(),
       })
-      .eq('user_id', userId)
+      .eq("user_id", userId)
       .select()
       .single();
 
     if (error) {
-      throw new AppError('Erro ao atualizar perfil: ' + error.message, 400);
+      throw new AppError("Erro ao atualizar perfil: " + error.message, 400);
     }
 
     return data;
@@ -209,9 +251,14 @@ export class UserService {
    * @param version     - Versão do documento (ex: '1.0', '2.1')
    * @param ipHash      - Hash anonimizado do IP para fins de auditoria
    */
-  static async registerConsent(userId: string, consentType: string, version: string, ipHash?: string) {
+  static async registerConsent(
+    userId: string,
+    consentType: string,
+    version: string,
+    ipHash?: string,
+  ) {
     const { data, error } = await supabaseAdmin
-      .from('consents')
+      .from("consents")
       .insert({
         user_id: userId,
         type: consentType,
@@ -222,7 +269,10 @@ export class UserService {
       .single();
 
     if (error) {
-      throw new AppError('Erro ao registrar consentimento: ' + error.message, 400);
+      throw new AppError(
+        "Erro ao registrar consentimento: " + error.message,
+        400,
+      );
     }
 
     return data;
@@ -232,8 +282,8 @@ export class UserService {
 // ─── Auxiliar interno: cria cliente Supabase com token específico ─────────────
 // Usado apenas no logout para invalidar o token correto no Supabase Auth
 function clientWithToken(token: string) {
-  const { env } = require('../config/env');
-  const { createClient } = require('@supabase/supabase-js');
+  const { env } = require("../config/env");
+  const { createClient } = require("@supabase/supabase-js");
   return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: { persistSession: false },
     global: { headers: { Authorization: `Bearer ${token}` } },

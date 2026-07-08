@@ -13,17 +13,27 @@
  * O ID do usuário nunca precisa ser passado na URL — vem do token.
  */
 
-import { Router } from 'express';
-import { UserController } from '../controllers/UserController';
-import { requireAuth, requireRoles } from '../middlewares/authMiddleware';
+import { Router } from "express";
+import { UserController } from "../controllers/UserController";
+import { requireAuth, requireRoles } from "../middlewares/authMiddleware";
 
 const router = Router();
 
-router.get('/admin', requireAuth, requireRoles('administrador'), UserController.listUsers);
-router.patch('/admin/:id/role', requireAuth, requireRoles('administrador'), UserController.updateRole);
+router.get(
+  "/admin",
+  requireAuth,
+  requireRoles("administrador"),
+  UserController.listUsers,
+);
+router.patch(
+  "/admin/:id/role",
+  requireAuth,
+  requireRoles("administrador"),
+  UserController.updateRole,
+);
 
-router.get('/me', requireAuth, UserController.me);                          // Dados completos do usuário
-router.patch('/me/preferences', requireAuth, UserController.updatePreferences); // Atualiza perfil
-router.post('/me/consent', requireAuth, UserController.acceptConsent);      // Registro de consentimento LGPD
+router.get("/me", requireAuth, UserController.me); // Dados completos do usuário
+router.patch("/me/preferences", requireAuth, UserController.updatePreferences); // Atualiza perfil
+router.post("/me/consent", requireAuth, UserController.acceptConsent); // Registro de consentimento LGPD
 
 export default router;

@@ -15,30 +15,33 @@
  * após analisar o caso, garantindo rastreabilidade e auditoria completa.
  */
 
-import { Router } from 'express';
-import { ReportController } from '../controllers/ReportController';
-import { requireAuth, requireRoles } from '../middlewares/authMiddleware';
+import { Router } from "express";
+import { ReportController } from "../controllers/ReportController";
+import { requireAuth, requireRoles } from "../middlewares/authMiddleware";
 
 const router = Router();
 
 // Qualquer usuário autenticado pode enviar uma denúncia
-router.post('/', requireAuth, ReportController.create);
+router.post("/", requireAuth, ReportController.create);
 
 // Apenas moderadores e administradores podem acessar a lista e gerenciar casos
-router.get('/admin/reports',
+router.get(
+  "/admin/reports",
   requireAuth,
-  requireRoles('moderador', 'administrador'),
-  ReportController.list
+  requireRoles("moderador", "administrador"),
+  ReportController.list,
 );
-router.get('/admin/reports/:id',
+router.get(
+  "/admin/reports/:id",
   requireAuth,
-  requireRoles('moderador', 'administrador'),
-  ReportController.get
+  requireRoles("moderador", "administrador"),
+  ReportController.get,
 );
-router.patch('/admin/reports/:id',
+router.patch(
+  "/admin/reports/:id",
   requireAuth,
-  requireRoles('moderador', 'administrador'),
-  ReportController.updateCase
+  requireRoles("moderador", "administrador"),
+  ReportController.updateCase,
 );
 
 export default router;

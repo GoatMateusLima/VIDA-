@@ -18,53 +18,64 @@
  * As rotas /approve e /suspend usam POST pois representam ações, não atualizações parciais.
  */
 
-import { Router } from 'express';
-import { AdminController } from '../controllers/AdminController';
-import { requireAuth, requireRoles } from '../middlewares/authMiddleware';
+import { Router } from "express";
+import { AdminController } from "../controllers/AdminController";
+import { requireAuth, requireRoles } from "../middlewares/authMiddleware";
 
 const router = Router();
 
-router.get('/volunteers',
+router.get(
+  "/volunteers",
   requireAuth,
-  requireRoles('administrador'),
-  AdminController.listVolunteers
+  requireRoles("administrador"),
+  AdminController.listVolunteers,
 );
 
 // ─── Candidatura (qualquer usuário autenticado) ───────────────────────────────
-router.post('/volunteers/apply', requireAuth, AdminController.applyForVolunteer);
+router.post(
+  "/volunteers/apply",
+  requireAuth,
+  AdminController.applyForVolunteer,
+);
 
 // ─── Atualização de disponibilidade (somente voluntários+) ───────────────────
-router.patch('/volunteers/availability',
+router.patch(
+  "/volunteers/availability",
   requireAuth,
-  requireRoles('voluntario', 'moderador', 'administrador'),
-  AdminController.updateAvailability
+  requireRoles("voluntario", "moderador", "administrador"),
+  AdminController.updateAvailability,
 );
 
 // ─── Gestão administrativa (somente administradores) ─────────────────────────
-router.get('/volunteers/applications',
+router.get(
+  "/volunteers/applications",
   requireAuth,
-  requireRoles('administrador'),
-  AdminController.listVolunteerApplications
+  requireRoles("administrador"),
+  AdminController.listVolunteerApplications,
 );
-router.get('/volunteers/applications/:id',
+router.get(
+  "/volunteers/applications/:id",
   requireAuth,
-  requireRoles('administrador'),
-  AdminController.getVolunteerApplication
+  requireRoles("administrador"),
+  AdminController.getVolunteerApplication,
 );
-router.post('/volunteers/:id/approve',
+router.post(
+  "/volunteers/:id/approve",
   requireAuth,
-  requireRoles('administrador'),
-  AdminController.approveVolunteer
+  requireRoles("administrador"),
+  AdminController.approveVolunteer,
 );
-router.post('/volunteers/:id/reject',
+router.post(
+  "/volunteers/:id/reject",
   requireAuth,
-  requireRoles('administrador'),
-  AdminController.rejectVolunteer
+  requireRoles("administrador"),
+  AdminController.rejectVolunteer,
 );
-router.post('/volunteers/:id/suspend',
+router.post(
+  "/volunteers/:id/suspend",
   requireAuth,
-  requireRoles('administrador'),
-  AdminController.suspendVolunteer
+  requireRoles("administrador"),
+  AdminController.suspendVolunteer,
 );
 
 export default router;

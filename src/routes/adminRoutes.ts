@@ -24,6 +24,12 @@ import { requireAuth, requireRoles } from '../middlewares/authMiddleware';
 
 const router = Router();
 
+router.get('/volunteers',
+  requireAuth,
+  requireRoles('administrador'),
+  AdminController.listVolunteers
+);
+
 // ─── Candidatura (qualquer usuário autenticado) ───────────────────────────────
 router.post('/volunteers/apply', requireAuth, AdminController.applyForVolunteer);
 
@@ -40,10 +46,20 @@ router.get('/volunteers/applications',
   requireRoles('administrador'),
   AdminController.listVolunteerApplications
 );
+router.get('/volunteers/applications/:id',
+  requireAuth,
+  requireRoles('administrador'),
+  AdminController.getVolunteerApplication
+);
 router.post('/volunteers/:id/approve',
   requireAuth,
   requireRoles('administrador'),
   AdminController.approveVolunteer
+);
+router.post('/volunteers/:id/reject',
+  requireAuth,
+  requireRoles('administrador'),
+  AdminController.rejectVolunteer
 );
 router.post('/volunteers/:id/suspend',
   requireAuth,

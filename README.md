@@ -1,73 +1,73 @@
-# VIDA+
+# VIDA+ Backend
 
 Backend em Node.js, Express e TypeScript para a plataforma VIDA+. A API usa
 Supabase para autenticacao, banco de dados, RLS e operacoes administrativas via
 service role.
 
-## Status atual
+## URLs
 
-Verificado em 17/06/2026 contra o projeto Supabase configurado no `.env`:
+```text
+Local:   http://localhost:3000/api
+Render:  https://vida-43t9.onrender.com/api
+Health:  /api/health
+```
 
-- 16 tabelas esperadas acessiveis sem falhas.
-- `community_members.alias` existe e esta funcionando.
-- `community_messages` existe e esta funcionando.
-- Comunidades iniciais criadas:
-  - Ansiedade e rotina
-  - Conversas leves
-  - Luto e saudade
-
-## Como rodar
+## Como Rodar
 
 ```bash
 npm install
 npm run dev
 ```
 
-API local:
+Para compilar e iniciar o build:
 
-```text
-http://localhost:3000/api
+```bash
+npm run build
+npm start
 ```
 
-Health check:
+## Variaveis de Ambiente
 
-```text
-GET /api/health
-```
+Use `.env.example` como base.
 
-## Variaveis de ambiente
-
-Use `.env.example` como base:
-
-```text
+```env
 PORT=3000
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_ANON_KEY=sua-anon-key
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 NODE_ENV=development
 MESSAGE_ENCRYPTION_KEY=
-CORS_ORIGINS=http://localhost:5173
+CORS_ORIGINS=http://localhost:5173,https://vidafrontend.netlify.app
 TRUST_PROXY=0
-PASSWORD_RESET_REDIRECT_URL=http://localhost:5173/redefinir-senha
+PASSWORD_RESET_REDIRECT_URL=http://localhost:5173/recuperar-senha
 ```
 
-Em producao, `MESSAGE_ENCRYPTION_KEY` precisa ser uma chave Base64 de 32 bytes:
+Em producao no Render, use:
+
+```env
+NODE_ENV=production
+TRUST_PROXY=1
+CORS_ORIGINS=https://vidafrontend.netlify.app,http://localhost:5173
+PASSWORD_RESET_REDIRECT_URL=https://vidafrontend.netlify.app/recuperar-senha
+```
+
+Gere `MESSAGE_ENCRYPTION_KEY` com:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-## Banco de dados
+## Banco de Dados
 
-O banco e montado no Supabase.
+O banco roda no Supabase.
 
-Ordem para criar um banco novo:
+Para preparar um banco novo, rode no SQL Editor do Supabase:
 
-1. Rodar `schema.sql` no SQL Editor do Supabase.
-2. Rodar `migrations/001_production_hardening.sql`.
-3. Rodar `migrations/002_pseudonymous_communities.sql`.
+1. `schema.sql`
+2. `migrations/001_production_hardening.sql`
+3. `migrations/002_pseudonymous_communities.sql`
 
-O `schema.sql` cria a estrutura principal:
+O `schema.sql` cria:
 
 - usuarios e perfis
 - consentimentos LGPD
@@ -77,20 +77,12 @@ O `schema.sql` cria a estrutura principal:
 - comunidades e membros
 - notificacoes e push subscriptions
 - logs de auditoria
-- trigger `on_auth_user_created` para criar `public.users` e
-  `public.user_profiles` quando uma conta e criada no Supabase Auth
+- trigger `on_auth_user_created`
 
-As migrations aplicam os ajustes posteriores:
-
-- indices e constraints de producao
-- politicas RLS mais restritas
-- suporte a comunidades pseudonimas
-- tabela `community_messages`
-- seeds das comunidades iniciais
+As migrations adicionam hardening de producao, indices, politicas RLS mais
+restritas, comunidades pseudonimas, `community_messages` e comunidades iniciais.
 
 ## Arquitetura
-
-Estrutura principal:
 
 ```text
 src/
@@ -107,28 +99,26 @@ src/
   utils/
 ```
 
-Fluxo de uma requisicao:
+Fluxo:
 
 ```text
 cliente
-  -> src/server.ts
-  -> src/app.ts
-  -> src/routes/*
-  -> middlewares de seguranca/autenticacao
+  -> routes
+  -> middlewares
   -> controllers
   -> services
   -> Supabase
   -> resposta JSON
 ```
 
-Regras praticas:
+Regras:
 
-- Controllers validam entrada e formatam resposta.
+- Controllers validam entrada e formatam respostas.
 - Services concentram regra de negocio e chamadas ao Supabase.
-- `supabase` usa a anon key para Auth do usuario.
+- `supabase` usa anon key para Auth.
 - `supabaseAdmin` usa service role somente no backend.
-- Middlewares aplicam autenticacao, RBAC, rate limit, headers seguros e padrao
-  de erro.
+- Middlewares aplicam autenticacao, RBAC, rate limit, headers seguros e erros
+  padronizados.
 
 ## Rotas
 
@@ -186,7 +176,7 @@ Authorization: Bearer <access_token>
 - `GET /api/notifications?page=1&limit=20`
 - `PATCH /api/notifications/:id/read`
 
-### Voluntariado e administracao
+### Voluntariado e Administracao
 
 - `POST /api/admin/volunteers/apply`
 - `PATCH /api/admin/volunteers/availability`
@@ -194,21 +184,36 @@ Authorization: Bearer <access_token>
 - `POST /api/admin/volunteers/:id/approve`
 - `POST /api/admin/volunteers/:id/suspend`
 
-### Denuncias e moderacao
+### Denuncias e Moderacao
 
 - `POST /api/reports`
 - `GET /api/reports/admin/reports`
 - `PATCH /api/reports/admin/reports/:id`
 
-Todas as falhas retornam um JSON padronizado com `status`, `message` e
-`requestId`.
+Todas as falhas retornam JSON com `status`, `message` e `requestId`.
+
+## Deploy no Render
+
+Configuracao recomendada:
+
+```text
+Build Command: npm ci --include=dev && npm run build
+Start Command: npm start
+Health Check Path: /api/health
+Node Version: 20
+```
+
+O projeto inclui `render.yaml` e `prestart` no `package.json`.
+
+Se o servico foi criado manualmente no Render, ajuste os comandos no painel. Se
+o Start Command estiver como `node dist/server.js`, troque para `npm start`.
 
 ## Seguranca
 
 - Nunca versionar `.env`, tokens, dumps ou conteudo de conversas.
-- `SUPABASE_SERVICE_ROLE_KEY` deve ficar somente no backend.
+- `SUPABASE_SERVICE_ROLE_KEY` fica somente no backend.
 - Mensagens sao criptografadas antes de serem salvas.
-- Em producao, configurar `CORS_ORIGINS` com os dominios reais.
+- Configure `CORS_ORIGINS` com os dominios reais.
 - O backend usa rate limiting, Helmet, limite de payload, RBAC e request id.
 - Logs nao devem registrar tokens nem corpo de mensagens.
 - Segredos expostos devem ser rotacionados imediatamente.
@@ -221,52 +226,3 @@ npm run build
 npm test
 npm start
 ```
-
-## Deploy no Render
-
-URL atual do backend:
-
-```text
-https://vida-43t9.onrender.com
-```
-
-O Render precisa compilar o TypeScript antes de iniciar o servidor. O erro:
-
-```text
-Cannot find module '/opt/render/project/src/dist/server.js'
-```
-
-significa que o comando de start tentou rodar `node dist/server.js`, mas a pasta
-`dist` nao tinha sido gerada no deploy.
-
-Configuracao recomendada no Render:
-
-```text
-Build Command: npm install && npm run build
-Start Command: npm start
-Health Check Path: /api/health
-Node Version: 20
-```
-
-O projeto tambem tem `render.yaml` com essa configuracao e `prestart` no
-`package.json` para rodar `npm run build` antes de `npm start`.
-
-Variaveis obrigatorias no Render:
-
-```text
-PORT
-SUPABASE_URL
-SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-NODE_ENV=production
-MESSAGE_ENCRYPTION_KEY
-CORS_ORIGINS
-TRUST_PROXY=1
-PASSWORD_RESET_REDIRECT_URL
-```
-
-## Limpeza da documentacao
-
-Este `README.md` substitui os documentos antigos `API.md`, `ARQUITETURA.md`,
-`COMO_FUNCIONA.md` e `SECURITY.md`. A documentacao operacional fica aqui; os
-arquivos SQL ficam em `schema.sql` e `migrations/`.

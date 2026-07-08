@@ -15,9 +15,12 @@
 
 import { Router } from 'express';
 import { UserController } from '../controllers/UserController';
-import { requireAuth } from '../middlewares/authMiddleware';
+import { requireAuth, requireRoles } from '../middlewares/authMiddleware';
 
 const router = Router();
+
+router.get('/admin', requireAuth, requireRoles('administrador'), UserController.listUsers);
+router.patch('/admin/:id/role', requireAuth, requireRoles('administrador'), UserController.updateRole);
 
 router.get('/me', requireAuth, UserController.me);                          // Dados completos do usuário
 router.patch('/me/preferences', requireAuth, UserController.updatePreferences); // Atualiza perfil

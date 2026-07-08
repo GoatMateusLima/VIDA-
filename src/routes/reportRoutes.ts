@@ -30,6 +30,11 @@ router.get('/admin/reports',
   requireRoles('moderador', 'administrador'),
   ReportController.list
 );
+router.get('/admin/reports/:id',
+  requireAuth,
+  requireRoles('moderador', 'administrador'),
+  ReportController.get
+);
 router.patch('/admin/reports/:id',
   requireAuth,
   requireRoles('moderador', 'administrador'),

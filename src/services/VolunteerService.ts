@@ -19,6 +19,19 @@ import { AppError } from '../middlewares/errorMiddleware';
 import { AuditService } from './AuditService';
 
 export class VolunteerService {
+  static async listVolunteers() {
+    const { data, error } = await supabaseAdmin
+      .from('volunteer_profiles')
+      .select('user_id, availability_status, training_status, total_chats, approved_at, users(display_name, status)')
+      .order('approved_at', { ascending: false });
+
+    if (error) {
+      throw new AppError('Erro ao listar voluntarios: ' + error.message, 400);
+    }
+
+    return data || [];
+  }
+
   /**
    * Registra a candidatura de um usuário para se tornar voluntário.
    * A candidatura fica com status 'pendente' até ser revisada por um administrador.
@@ -70,6 +83,20 @@ export class VolunteerService {
 
     if (error) {
       throw new AppError('Erro ao listar candidaturas: ' + error.message, 400);
+    }
+
+    return data;
+  }
+
+  static async getApplication(applicationId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('volunteer_applications')
+      .select('*, users(display_name, status)')
+      .eq('id', applicationId)
+      .single();
+
+    if (error || !data) {
+      throw new AppError('Candidatura nao encontrada', 404);
     }
 
     return data;
@@ -136,6 +163,39 @@ export class VolunteerService {
     });
     return volProfile;
   }
+
+  static async rejectApplication(applicationId: string, reviewerId: string, decision: string) {
+    const { data: app, error: appError } = await supabaseAdmin
+      .from('volunteer_applications')
+      .select('*')
+      .eq('id', applicationId)
+      .single();
+
+    if (appError || !app) {
+      throw new AppError('Candidatura nao encontrada', 404);
+    }
+    if (app.status !== 'pendente') {
+      throw new AppError('Esta candidatura ja foi analisada.', 409);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('volunteer_applications')
+      .update({ status: 'rejeitada', reviewer_id: reviewerId, reviewed_at: new Date().toISOString() })
+      .eq('id', applicationId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new AppError('Erro ao rejeitar candidatura.', 400);
+    }
+
+    await AuditService.record(reviewerId, 'volunteer.rejected', 'volunteer_application', applicationId, {
+      user_id: app.user_id,
+      decision,
+    });
+    return data;
+  }
+
 
   /**
    * Suspende um voluntário, revertendo seu cargo e removendo seu perfil.

@@ -4,6 +4,15 @@ import { VolunteerService } from '../services/VolunteerService';
 import { AuthenticatedRequest } from '../types';
 
 export class AdminController {
+  static async listVolunteers(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await VolunteerService.listVolunteers();
+      res.status(200).json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Obter candidaturas de voluntários (Apenas Admin)
   static async listVolunteerApplications(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
@@ -16,6 +25,15 @@ export class AdminController {
         status: 'success',
         data,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getVolunteerApplication(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await VolunteerService.getApplication(req.params.id);
+      res.status(200).json({ status: 'success', data });
     } catch (error) {
       next(error);
     }
@@ -67,6 +85,29 @@ export class AdminController {
       next(error);
     }
   }
+
+  static async rejectVolunteer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        res.status(401).json({ status: 'error', message: 'NÃ£o autenticado' });
+        return;
+      }
+
+      const body = z.object({
+        decision: z.string().trim().min(5).default('Candidatura rejeitada pela administracao.'),
+      }).parse(req.body);
+      const data = await VolunteerService.rejectApplication(req.params.id, req.user.id, body.decision);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Candidatura rejeitada.',
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
 
   // Suspender voluntário (Apenas Admin)
   static async suspendVolunteer(req: AuthenticatedRequest, res: Response, next: NextFunction) {

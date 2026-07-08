@@ -27,6 +27,27 @@ import { AuthenticatedRequest } from '../types';
 import { hashPrivateValue } from '../utils/helpers';
 
 export class UserController {
+  static async listUsers(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await UserService.listUsers();
+      res.status(200).json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const body = z.object({
+        role: z.enum(['cadastrado', 'voluntario', 'moderador', 'administrador']),
+      }).parse(req.body);
+      const data = await UserService.updateRole(req.params.id, body.role);
+      res.status(200).json({ status: 'success', message: 'Papel atualizado com sucesso.', data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Cadastra um novo usuário na plataforma.
    * Cria a conta no Supabase Auth e, via trigger, nas tabelas públicas.

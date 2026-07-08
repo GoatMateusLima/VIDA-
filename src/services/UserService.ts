@@ -17,8 +17,41 @@
 import { supabase, supabaseAdmin } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../middlewares/errorMiddleware';
+import { UserRole } from '../types';
 
 export class UserService {
+  static async listUsers() {
+    const { data: users, error } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name, role, status, created_at, updated_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new AppError('Erro ao listar usuarios: ' + error.message, 400);
+    }
+
+    return Promise.all((users || []).map(async (user) => {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
+      return { ...user, email: authUser.user?.email || '' };
+    }));
+  }
+
+  static async updateRole(userId: string, role: Exclude<UserRole, 'anonimo'>) {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update({ role, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select('id, display_name, role, status, created_at, updated_at')
+      .single();
+
+    if (error || !data) {
+      throw new AppError('Erro ao atualizar papel do usuario.', 400);
+    }
+
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    return { ...data, email: authUser.user?.email || '' };
+  }
+
   /**
    * Registra um novo usuário no Supabase Auth.
    * O trigger SQL `on_auth_user_created` cria automaticamente o registro

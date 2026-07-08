@@ -13,14 +13,20 @@ export class ReportController {
       }
 
       const schema = z.object({
-        targetType: z.enum(['voluntario', 'usuario', 'mensagem', 'comunidade']),
-        targetId: z.string().uuid('ID inválido'),
+        targetType: z.enum(['voluntario', 'usuario', 'mensagem', 'comunidade']).default('usuario'),
+        targetId: z.string().uuid('ID inválido').optional(),
+        reportedAlias: z.string().trim().min(1).max(100).optional(),
         reason: z.string().min(3, 'Defina o motivo da denúncia'),
         description: z.string().optional(),
+      }).refine((value) => value.targetId || value.reportedAlias, {
+        message: 'Informe o alvo da denúncia.',
+        path: ['targetId'],
       });
 
       const body = schema.parse(req.body);
-      const data = await ReportService.create(req.user.id, body.targetType, body.targetId, body.reason, body.description);
+      const data = body.targetId
+        ? await ReportService.create(req.user.id, body.targetType, body.targetId, body.reason, body.description)
+        : await ReportService.createFromLabel(req.user.id, body.reportedAlias!, body.reason, body.description);
 
       res.status(201).json({
         status: 'success',
@@ -39,6 +45,19 @@ export class ReportController {
         status: z.enum(['pendente', 'em_analise', 'resolvido', 'arquivado']).optional(),
       }).parse(req.query);
       const data = await ReportService.list(status);
+
+      res.status(200).json({
+        status: 'success',
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async get(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await ReportService.getById(req.params.id);
 
       res.status(200).json({
         status: 'success',

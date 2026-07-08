@@ -53,6 +53,15 @@ export class ReportService {
     return report;
   }
 
+  static async createFromLabel(reporterId: string, targetLabel: string, reason: string, description?: string) {
+    const details = [
+      `Alvo informado pela interface: ${targetLabel}`,
+      description,
+    ].filter(Boolean).join('\n\n');
+
+    return this.create(reporterId, 'usuario', reporterId, reason, details);
+  }
+
   /**
    * Lista todas as denúncias com seus respectivos casos de moderação.
    * Disponível apenas para moderadores e administradores.
@@ -72,6 +81,20 @@ export class ReportService {
 
     if (error) {
       throw new AppError('Erro ao listar denúncias: ' + error.message, 400);
+    }
+
+    return data;
+  }
+
+  static async getById(reportId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('reports')
+      .select('*, moderation_cases(*)')
+      .eq('id', reportId)
+      .single();
+
+    if (error || !data) {
+      throw new AppError('Denuncia nao encontrada', 404);
     }
 
     return data;

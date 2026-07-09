@@ -19,13 +19,24 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import type { WebSocketLikeConstructor } from '@supabase/realtime-js';
+import WebSocket from 'ws';
 import { env } from './env';
 
+const WebSocketTransport = WebSocket as unknown as WebSocketLikeConstructor;
+
+const supabaseOptions = {
+  realtime: {
+    transport: WebSocketTransport,
+  },
+};
+
 // Cliente padrão — respeita RLS, usado para operações comuns
-export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, supabaseOptions);
 
 // Cliente admin — ignora RLS, usado para operações administrativas no backend
 export const supabaseAdmin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  ...supabaseOptions,
   auth: {
     autoRefreshToken: false, // O backend não precisa renovar tokens automaticamente
     persistSession: false    // O backend não armazena sessões em memória

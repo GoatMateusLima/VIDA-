@@ -58,6 +58,24 @@ export class ReportController {
     }
   }
 
+  // Listar denúncias do próprio usuário (acompanhamento público)
+  static async listMine(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      if (!req.user) {
+        res.status(401).json({ status: "error", message: "Não autenticado" });
+        return;
+      }
+      const data = await ReportService.listByReporter(req.user.id);
+      res.status(200).json({ status: "success", data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Listar denúncias (Apenas Moderador/Admin)
   static async list(
     req: AuthenticatedRequest,

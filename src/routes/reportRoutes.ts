@@ -24,6 +24,9 @@ const router = Router();
 // Qualquer usuário autenticado pode enviar uma denúncia
 router.post("/", requireAuth, ReportController.create);
 
+// Usuário vê as próprias denúncias e acompanha o status
+router.get("/my", requireAuth, ReportController.listMine);
+
 // Apenas moderadores e administradores podem acessar a lista e gerenciar casos
 router.get(
   "/admin/reports",

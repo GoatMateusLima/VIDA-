@@ -89,7 +89,7 @@ export class VolunteerService {
     });
 
     if (error) {
-      throw new AppError("Erro ao listar candidaturas: " + error.message, 400);
+      throw new AppError("Erro ao listar candidaturas: " + error.message + " | code: " + error.code, 400);
     }
 
     return (data || []).map(parseApplicationFields);

@@ -82,10 +82,54 @@ export class ReportService {
   }
 
   /**
+   * Lista as denúncias enviadas pelo próprio usuário.
+   * Retorna apenas campos públicos — sem decisão interna, sem nome do moderador.
+   * O usuário pode acompanhar o status mas não vê detalhes da análise.
+   */
+  static async listByReporter(reporterId: string) {
+    const { data, error } = await supabaseAdmin
+      .from("reports")
+      .select("id, reason, description, status, created_at, moderation_cases(status)")
+      .eq("reporter_id", reporterId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new AppError("Erro ao buscar denúncias: " + error.message, 400);
+    }
+
+    return (data || []).map((report) => {
+      // Histórico público — apenas ações visíveis ao usuário, sem dados internos
+      const history: { at: string; action: string; by: string }[] = [
+        { at: report.created_at, action: "Denúncia registrada", by: "Sistema" },
+      ];
+
+      const modCase = Array.isArray(report.moderation_cases)
+        ? report.moderation_cases[0]
+        : report.moderation_cases;
+
+      if (modCase?.status === "em_analise") {
+        history.push({ at: report.created_at, action: "Em análise", by: "Sistema" });
+      } else if (modCase?.status === "resolvido") {
+        history.push({ at: report.created_at, action: "Resolvida", by: "Sistema" });
+      } else if (modCase?.status === "arquivado") {
+        history.push({ at: report.created_at, action: "Arquivada", by: "Sistema" });
+      }
+
+      return {
+        id: report.id,
+        reason: report.reason,
+        description: report.description,
+        status: report.status,
+        priority: "media", // campo esperado pelo frontend — sem lógica de prioridade ainda
+        created_at: report.created_at,
+        history,
+      };
+    });
+  }
+
+  /**
    * Lista todas as denúncias com seus respectivos casos de moderação.
    * Disponível apenas para moderadores e administradores.
-   *
-   * @param status - Filtro opcional por status da denúncia
    */
   static async list(status?: string) {
     let query = supabaseAdmin.from("reports").select("*, moderation_cases(*)"); // Join com a tabela de casos

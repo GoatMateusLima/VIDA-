@@ -191,6 +191,14 @@ export class UserController {
     }
   }
 
+  static async refresh(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const body = z.object({ refreshToken: z.string().min(1) }).parse(req.body);
+      const data = await UserService.refreshSession(body.refreshToken);
+      res.status(200).json({ status: "success", data: { session: data.session, user: data.user } });
+    } catch (error) {
+      next(error);
+    }  }
   /**
    * Encerra a sessão do usuário, invalidando o token no Supabase.
    * O token é extraído do header Authorization da requisição.

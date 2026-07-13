@@ -142,6 +142,16 @@ export class UserService {
     return data;
   }
 
+  static async refreshSession(refreshToken: string) {
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken,
+    });
+    if (error || !data.session) {
+      throw new AppError("Session expired. Please sign in again.", 401);
+    }
+    return data;
+  }
+
   /**
    * Encerra a sessão do usuário no Supabase (invalida o access_token).
    *

@@ -254,11 +254,11 @@ export class CommunityService {
       items: (data || []).reverse().map((message) => ({
         id: message.id,
         community_id: message.community_id,
-        sender_id: message.sender_id,           // Gap #10 — sempre retornar sender_id
-        alias_snapshot: message.alias_snapshot,  // campo principal esperado pelo frontend
-        alias: message.alias_snapshot,            // fallback de compatibilidade
-        body: decryptMessage(message.body_encrypted),
-        body_encrypted: message.body_encrypted,   // Gap community #message-body — frontend aceita body_encrypted também
+        sender_id: message.sender_id,
+        alias_snapshot: message.alias_snapshot,
+        alias: message.alias_snapshot,
+        body: decryptMessage(message.body_encrypted),  // texto limpo — nunca expor body_encrypted
+        text: decryptMessage(message.body_encrypted),  // alias extra para compatibilidade
         is_mine: message.sender_id === userId,
         created_at: message.created_at,
         edited_at: message.edited_at,
@@ -285,10 +285,11 @@ export class CommunityService {
     return {
       id: data.id,
       community_id: data.community_id,
-      sender_id: userId,                        // Gap #10 — sempre retornar sender_id
-      alias_snapshot: data.alias_snapshot,  // campo principal esperado pelo frontend
-      alias: data.alias_snapshot,            // fallback de compatibilidade
-      body: text,
+      sender_id: userId,
+      alias_snapshot: data.alias_snapshot,
+      alias: data.alias_snapshot,
+      body: text,   // texto limpo original
+      text: text,   // alias extra para compatibilidade
       is_mine: true,
       created_at: data.created_at,
     };

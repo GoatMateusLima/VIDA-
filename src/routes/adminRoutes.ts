@@ -41,7 +41,6 @@ router.post(
 router.post(
   "/moderators/apply",
   requireAuth,
-  requireRoles("voluntario"),
   AdminController.applyForModerator,
 );
 router.get(

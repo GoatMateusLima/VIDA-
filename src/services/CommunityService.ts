@@ -220,7 +220,13 @@ export class CommunityService {
       .maybeSingle();
     if (existing?.status === 'ativo') return existing;
 
-    const payload = { community_id: communityId, user_id: userId, alias: existing?.alias || createAlias(), role: 'membro', status: 'ativo' };
+    const { data: profile } = await supabaseAdmin
+      .from('user_profiles')
+      .select('nickname')
+      .eq('user_id', userId)
+      .single();
+    const alias = profile?.nickname?.trim() || existing?.alias || createAlias();
+    const payload = { community_id: communityId, user_id: userId, alias, role: 'membro', status: 'ativo' };
     const { data, error } = await supabaseAdmin
       .from('community_members')
       .upsert(payload)

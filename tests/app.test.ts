@@ -23,4 +23,18 @@ describe('HTTP baseline', () => {
       .set('Origin', 'http://localhost:5173');
     expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5173');
   });
+
+  it('does not expose anonymous account creation', async () => {
+    const response = await request(app).post('/api/auth/anonymous');
+    expect(response.status).toBe(404);
+  });
+
+  it('requires a public nickname when creating an account', async () => {
+    const response = await request(app).post('/api/auth/register').send({
+      displayName: 'Pessoa Exemplo',
+      email: 'pessoa@example.com',
+      password: 'SenhaSegura123',
+    });
+    expect(response.status).toBe(400);
+  });
 });

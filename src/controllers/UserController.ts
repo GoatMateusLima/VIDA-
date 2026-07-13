@@ -73,7 +73,7 @@ export class UserController {
    * Cadastra um novo usuário na plataforma.
    * Cria a conta no Supabase Auth e, via trigger, nas tabelas públicas.
    *
-   * Body esperado: { email, password, displayName, role? }
+    * Body esperado: { email, password, displayName, nickname }
    * Resposta: 201 com dados do usuário criado
    */
   static async register(
@@ -92,6 +92,7 @@ export class UserController {
           .regex(/[A-Z]/, "A senha precisa de uma letra maiúscula")
           .regex(/[0-9]/, "A senha precisa de um número"),
         displayName: z.string().trim().min(2, "Nome muito curto").max(100),
+        nickname: z.string().trim().min(2, "Apelido muito curto").max(50),
       });
 
       const body = schema.parse(req.body);
@@ -99,6 +100,7 @@ export class UserController {
         body.email,
         body.password,
         body.displayName,
+        body.nickname,
       );
 
       res.status(201).json({
@@ -182,23 +184,6 @@ export class UserController {
       res.status(200).json({
         status: "success",
         message: "Autenticação realizada com sucesso!",
-        data: { session: data.session, user: data.user },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  static async anonymous(
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction,
-  ) {
-    try {
-      const data = await UserService.signInAnonymously();
-      res.status(201).json({
-        status: "success",
-        message: "Sessão pseudônima criada.",
         data: { session: data.session, user: data.user },
       });
     } catch (error) {

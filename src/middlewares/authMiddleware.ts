@@ -54,6 +54,10 @@ export async function requireAuth(
       .eq('id', user.id)
       .single();
 
+    if (dbUser?.role === 'anonimo') {
+      throw new AppError('Crie uma conta para continuar.', 403);
+    }
+
     // 4. Injeta os dados do usuário em req.user para uso nos controllers
     if (dbError || !dbUser) {
       // Fallback seguro: se não encontrar no banco, assume 'cadastrado'

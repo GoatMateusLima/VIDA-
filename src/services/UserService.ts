@@ -14,7 +14,6 @@
  *   - `supabaseAdmin`: usado para leitura/escrita nas tabelas públicas (ignora RLS)
  */
 
-import { randomUUID } from "crypto";
 import { supabase, supabaseAdmin } from "../config/database";
 import { env } from "../config/env";
 import { AppError } from "../middlewares/errorMiddleware";
@@ -68,13 +67,14 @@ export class UserService {
    * @param displayName - Nome de exibição na plataforma
    * @param role        - Cargo inicial do usuário (padrão: 'cadastrado')
    */
-  static async register(email: string, password: string, displayName: string) {
+  static async register(email: string, password: string, displayName: string, nickname: string) {
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: {
         display_name: displayName,
+        nickname,
       },
     });
 
@@ -94,7 +94,7 @@ export class UserService {
     });
     await supabaseAdmin
       .from("user_profiles")
-      .upsert({ user_id: created.user.id });
+      .upsert({ user_id: created.user.id, nickname });
 
     return this.login(email, password);
   }
@@ -140,27 +140,6 @@ export class UserService {
     }
 
     return data;
-  }
-
-  static async signInAnonymously() {
-    const email = `anon-${randomUUID()}@anonymous.vida.local`;
-    const password = `Anon${randomUUID()}1a`;
-    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        display_name: "Pessoa anônima",
-      },
-    });
-    if (error || !created.user) {
-      throw new AppError("Acesso anônimo indisponível no momento.", 400);
-    }
-    await supabaseAdmin
-      .from("users")
-      .update({ role: "anonimo", display_name: "Pessoa anônima" })
-      .eq("id", created.user.id);
-    return this.login(email, password);
   }
 
   /**
@@ -241,6 +220,17 @@ export class UserService {
 
     if (error) {
       throw new AppError("Erro ao atualizar perfil: " + error.message, 400);
+    }
+
+    if (updates.nickname) {
+      const { error: membershipError } = await supabaseAdmin
+        .from("community_members")
+        .update({ alias: updates.nickname })
+        .eq("user_id", userId)
+        .eq("status", "ativo");
+      if (membershipError) {
+        throw new AppError("Perfil atualizado, mas não foi possível atualizar o apelido nos grupos.", 500);
+      }
     }
 
     return data;

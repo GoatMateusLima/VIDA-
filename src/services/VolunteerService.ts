@@ -69,6 +69,7 @@ export class VolunteerService {
   /**
    * Lista todas as candidaturas, opcionalmente filtradas por status.
    * Inclui dados do usuário (display_name) via join.
+   * O campo `availability` é extraído do campo `experience` se presente.
    *
    * @param status - Filtro opcional: 'pendente' | 'aprovada' | 'rejeitada'
    */
@@ -91,7 +92,26 @@ export class VolunteerService {
       throw new AppError("Erro ao listar candidaturas: " + error.message, 400);
     }
 
-    return data;
+    return (data || []).map(parseApplicationFields);
+  }
+
+  static async getMyApplication(userId: string) {
+    const { data, error } = await supabaseAdmin
+      .from("volunteer_applications")
+      .select("*, users(display_name, status)")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new AppError("Erro ao buscar candidatura: " + error.message, 400);
+    }
+    if (!data) {
+      throw new AppError("Candidatura não encontrada", 404);
+    }
+
+    return parseApplicationFields(data);
   }
 
   static async getApplication(applicationId: string) {
@@ -105,7 +125,7 @@ export class VolunteerService {
       throw new AppError("Candidatura nao encontrada", 404);
     }
 
-    return data;
+    return parseApplicationFields(data);
   }
 
   /**
@@ -311,21 +331,38 @@ export class VolunteerService {
   }
 
   /**
-   * Retorna métricas resumidas para o dashboard operacional do voluntário.
-   * Usa COUNT para evitar trazer dados desnecessários da rede.
+   * Retorna métricas resumidas para o dashboard operacional do voluntário/admin.
+   * Gap #4 — inclui campos completos esperados pelo frontend:
+   *   onlineVolunteers, ativas, total, totalUsersAllTime, satisfactionRate, weeklyConversations
    */
   static async getDashboardData() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
     // Conta atendimentos aguardando na fila
     const { count: pendingChats } = await supabaseAdmin
       .from("conversations")
       .select("*", { count: "exact", head: true })
       .eq("status", "aguardando");
 
-    // Conta atendimentos em andamento
+    // Conta atendimentos ativos (ativas)
     const { count: activeChats } = await supabaseAdmin
       .from("conversations")
       .select("*", { count: "exact", head: true })
       .eq("status", "ativa");
+
+    // Conta total de conversas criadas hoje
+    const { count: conversationsToday } = await supabaseAdmin
+      .from("conversations")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", todayISO);
+
+    // Conta total de conversas encerradas
+    const { count: encerradas } = await supabaseAdmin
+      .from("conversations")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "encerrada");
 
     // Conta voluntários online no momento
     const { count: onlineVolunteers } = await supabaseAdmin
@@ -333,10 +370,64 @@ export class VolunteerService {
       .select("*", { count: "exact", head: true })
       .eq("availability_status", "online");
 
+    // Conta total de usuários cadastrados (todos os tempos)
+    const { count: totalUsersAllTime } = await supabaseAdmin
+      .from("users")
+      .select("*", { count: "exact", head: true });
+
+    // Dados semanais: últimos 7 dias
+    const weeklyConversations = await buildWeeklyData();
+
     return {
-      pendingChats: pendingChats || 0,
-      activeChats: activeChats || 0,
+      // Campos mapeados pelo frontend (dashboard admin)
+      ativas: activeChats || 0,
+      total: conversationsToday || 0,
+      encerradas: encerradas || 0,
       onlineVolunteers: onlineVolunteers || 0,
+      pendingChats: pendingChats || 0,
+      totalUsersAllTime: totalUsersAllTime || 0,
+      satisfactionRate: 0,          // Não implementado ainda — frontend aceita 0
+      weeklyConversations,
+      // Aliases de compatibilidade
+      pendingChats_alias: pendingChats || 0,
+      activeChats: activeChats || 0,
     };
   }
+}
+
+// ─── Helper: normaliza campos de candidatura para o formato esperado pelo frontend
+function parseApplicationFields(app: any) {
+  return {
+    ...app,
+    // Garante que o display_name do usuário fica no nível raiz
+    display_name: app.users?.display_name ?? null,
+    user_status: app.users?.status ?? null,
+  };
+}
+
+// ─── Helper: agrega conversas por dia nos últimos 7 dias ─────────────────────
+async function buildWeeklyData() {
+  const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const result = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    date.setHours(0, 0, 0, 0);
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const { count } = await supabaseAdmin
+      .from('conversations')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', date.toISOString())
+      .lt('created_at', nextDate.toISOString());
+
+    result.push({
+      day: days[date.getDay()],
+      conversations: count || 0,
+    });
+  }
+
+  return result;
 }

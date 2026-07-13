@@ -17,6 +17,24 @@ export class AdminController {
     }
   }
 
+  // Voluntário consulta a própria candidatura (Gap #6)
+  static async getMyApplication(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      if (!req.user) {
+        res.status(401).json({ status: "error", message: "Não autenticado" });
+        return;
+      }
+      const data = await VolunteerService.getMyApplication(req.user.id);
+      res.status(200).json({ status: "success", data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Obter candidaturas de voluntários (Apenas Admin)
   static async listVolunteerApplications(
     req: AuthenticatedRequest,

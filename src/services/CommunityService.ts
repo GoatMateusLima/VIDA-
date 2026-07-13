@@ -196,8 +196,9 @@ export class CommunityService {
     const memberMap = new Map((memberships || []).map((item) => [item.community_id, item.alias]));
     return (data || []).map((community) => ({
       ...community,
-      joined: memberMap.has(community.id),
-      my_alias: memberMap.get(community.id),
+      is_member: memberMap.has(community.id),   // snake_case consistente (Gap community #is_member)
+      joined: memberMap.has(community.id),       // alias de compatibilidade
+      my_alias: memberMap.get(community.id) ?? null,  // Gap #8
     }));
   }
 
@@ -253,8 +254,11 @@ export class CommunityService {
       items: (data || []).reverse().map((message) => ({
         id: message.id,
         community_id: message.community_id,
-        alias: message.alias_snapshot,
+        sender_id: message.sender_id,           // Gap #10 — sempre retornar sender_id
+        alias_snapshot: message.alias_snapshot,  // campo principal esperado pelo frontend
+        alias: message.alias_snapshot,            // fallback de compatibilidade
         body: decryptMessage(message.body_encrypted),
+        body_encrypted: message.body_encrypted,   // Gap community #message-body — frontend aceita body_encrypted também
         is_mine: message.sender_id === userId,
         created_at: message.created_at,
         edited_at: message.edited_at,
@@ -281,7 +285,9 @@ export class CommunityService {
     return {
       id: data.id,
       community_id: data.community_id,
-      alias: data.alias_snapshot,
+      sender_id: userId,                        // Gap #10 — sempre retornar sender_id
+      alias_snapshot: data.alias_snapshot,  // campo principal esperado pelo frontend
+      alias: data.alias_snapshot,            // fallback de compatibilidade
       body: text,
       is_mine: true,
       created_at: data.created_at,

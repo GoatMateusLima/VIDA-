@@ -51,7 +51,28 @@ export class ConversationService {
       throw new AppError('Erro ao iniciar atendimento: ' + error.message, 400);
     }
 
-    return data;
+    // Gap #2 — posição na fila e tempo estimado de espera
+    const { count: position } = await supabaseAdmin
+      .from('conversations')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'aguardando')
+      .lte('created_at', data.created_at);
+
+    const { count: onlineVolunteers } = await supabaseAdmin
+      .from('volunteer_profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('availability_status', 'online');
+
+    const queuePosition = position || 1;
+    const volunteers = onlineVolunteers || 1;
+    // Estimativa simples: 5 minutos por posição dividido pelo nº de voluntários
+    const estimatedWaitMinutes = Math.ceil((queuePosition * 5) / volunteers);
+
+    return {
+      ...data,
+      position: queuePosition,
+      estimated_wait_minutes: estimatedWaitMinutes,
+    };
   }
 
   /**
@@ -82,6 +103,17 @@ export class ConversationService {
       throw new AppError('Você não tem permissão para acessar este atendimento.', 403);
     }
 
+    // Gap #3 — busca nome do voluntário para exibição no frontend
+    let volunteer_display_name: string | null = null;
+    if (conversation.volunteer_id) {
+      const { data: volunteerUser } = await supabaseAdmin
+        .from('users')
+        .select('display_name')
+        .eq('id', conversation.volunteer_id)
+        .single();
+      volunteer_display_name = volunteerUser?.display_name ?? null;
+    }
+
     // Busca mensagens e descriptografa o conteúdo para exibição
     const { data: messages } = await supabaseAdmin
       .from('messages')
@@ -94,7 +126,7 @@ export class ConversationService {
       body: decryptMessage(msg.body_encrypted), // Texto legível para o frontend
     }));
 
-    return { ...conversation, messages: decryptedMessages };
+    return { ...conversation, volunteer_display_name, messages: decryptedMessages };
   }
 
   /**
@@ -311,7 +343,7 @@ export class ConversationService {
     const to = from + limit - 1;
     let query = supabaseAdmin
       .from('conversations')
-      .select('id, status, priority, started_at, ended_at, closed_reason, created_at, updated_at', {
+      .select('id, user_id, volunteer_id, status, priority, started_at, ended_at, closed_reason, created_at, updated_at', {
         count: 'exact',
       });
 
@@ -327,7 +359,30 @@ export class ConversationService {
     if (error) {
       throw new AppError('Erro ao buscar histórico: ' + error.message, 400);
     }
-    return { items: data || [], page, limit, total: count || 0 };
+
+    // Enriquecer cada conversa com anonymous_name e last_message
+    const items = await Promise.all((data || []).map(async (conv: any) => {
+      // Busca última mensagem descriptografada
+      const { data: lastMsgData } = await supabaseAdmin
+        .from('messages')
+        .select('body_encrypted, created_at')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const lastMessage = lastMsgData
+        ? decryptMessage(lastMsgData.body_encrypted)
+        : null;
+
+      return {
+        ...conv,
+        anonymous_name: 'Pessoa acolhida',
+        last_message: lastMessage,
+      };
+    }));
+
+    return { items, page, limit, total: count || 0 };
   }
 
   static async messagesAfter(

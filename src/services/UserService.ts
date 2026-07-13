@@ -200,8 +200,12 @@ export class UserService {
       .eq("user_id", userId)
       .single();
 
+    // Busca o email do Supabase Auth (não está na tabela pública)
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+
     return {
       ...user,
+      email: authUser?.user?.email ?? null,
       profile: profile || null,
     };
   }

@@ -116,7 +116,65 @@ export class ReportService {
       throw new AppError("Denuncia nao encontrada", 404);
     }
 
-    return data;
+    // Gap #7 — monta history[] para a timeline do frontend
+    const history: { at: string; action: string; by: string }[] = [];
+
+    // Entrada inicial: criação da denúncia
+    history.push({
+      at: data.created_at,
+      action: "Denúncia registrada",
+      by: "Sistema",
+    });
+
+    const modCase = Array.isArray(data.moderation_cases)
+      ? data.moderation_cases[0]
+      : data.moderation_cases;
+
+    if (modCase) {
+      if (modCase.assigned_to) {
+        // Busca nome do moderador responsável
+        const { data: actor } = await supabaseAdmin
+          .from("users")
+          .select("display_name")
+          .eq("id", modCase.assigned_to)
+          .single();
+        const actorName = actor?.display_name ?? "Moderador";
+
+        if (modCase.status === "em_analise") {
+          history.push({
+            at: modCase.resolved_at ?? data.created_at,
+            action: "Atribuída para análise",
+            by: actorName,
+          });
+        } else if (["resolvido", "arquivado"].includes(modCase.status)) {
+          history.push({
+            at: modCase.resolved_at ?? data.created_at,
+            action: "Caso resolvido",
+            by: actorName,
+          });
+        }
+      }
+    }
+
+    // Busca trilha de auditoria relacionada a este relatório
+    const { data: auditLogs } = await supabaseAdmin
+      .from("audit_logs")
+      .select("action, created_at, actor_id")
+      .eq("entity_type", "report")
+      .eq("entity_id", reportId)
+      .order("created_at", { ascending: true });
+
+    for (const log of auditLogs || []) {
+      // Evita duplicar a entrada de resolução já adicionada
+      if (log.action === "report.reviewed") continue;
+      history.push({
+        at: log.created_at,
+        action: log.action,
+        by: log.actor_id ?? "Sistema",
+      });
+    }
+
+    return { ...data, history };
   }
 
   /**

@@ -104,7 +104,10 @@ export class UserController {
       res.status(201).json({
         status: "success",
         message: "Usuário cadastrado com sucesso!",
-        data: { user: data.user },
+        data: {
+          user: data.user,
+          session: data.session,
+        },
       });
     } catch (error) {
       next(error); // Repassa para o errorMiddleware tratar e formatar

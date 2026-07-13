@@ -19,7 +19,7 @@ export class NotificationService {
   static async markRead(userId: string, notificationId: string) {
     const { data, error } = await supabaseAdmin
       .from('notifications')
-      .update({ status: 'lida' })
+      .update({ status: 'lida', read_at: new Date().toISOString() })
       .eq('id', notificationId)
       .eq('user_id', userId)
       .select()

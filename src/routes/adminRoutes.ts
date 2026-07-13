@@ -38,6 +38,13 @@ router.post(
   AdminController.applyForVolunteer,
 );
 
+// ─── Voluntário consulta a própria candidatura ────────────────────────────────
+router.get(
+  "/volunteers/applications/me",
+  requireAuth,
+  AdminController.getMyApplication,
+);
+
 // ─── Atualização de disponibilidade (somente voluntários+) ───────────────────
 router.patch(
   "/volunteers/availability",

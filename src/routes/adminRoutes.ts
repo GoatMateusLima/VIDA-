@@ -38,6 +38,19 @@ router.post(
   AdminController.applyForVolunteer,
 );
 
+router.post(
+  "/moderators/apply",
+  requireAuth,
+  requireRoles("voluntario"),
+  AdminController.applyForModerator,
+);
+router.get(
+  "/moderators/applications/me",
+  requireAuth,
+  requireRoles("voluntario", "moderador"),
+  AdminController.getMyModeratorApplication,
+);
+
 // ─── Voluntário consulta a própria candidatura ────────────────────────────────
 router.get(
   "/volunteers/applications/me",
@@ -83,6 +96,30 @@ router.post(
   requireAuth,
   requireRoles("administrador"),
   AdminController.suspendVolunteer,
+);
+router.get(
+  "/moderators/applications",
+  requireAuth,
+  requireRoles("administrador"),
+  AdminController.listModeratorApplications,
+);
+router.get(
+  "/moderators/applications/:id",
+  requireAuth,
+  requireRoles("administrador"),
+  AdminController.getModeratorApplication,
+);
+router.post(
+  "/moderators/:id/approve",
+  requireAuth,
+  requireRoles("administrador"),
+  AdminController.approveModerator,
+);
+router.post(
+  "/moderators/:id/reject",
+  requireAuth,
+  requireRoles("administrador"),
+  AdminController.rejectModerator,
 );
 
 export default router;

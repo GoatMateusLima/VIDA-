@@ -28,32 +28,32 @@ const router = Router();
 // ─── Rotas do Voluntário (estáticas — devem vir antes de /:id) ───────────────
 router.get('/volunteer/queue',
   requireAuth,
-  requireRoles('voluntario', 'moderador', 'administrador'),
+  requireRoles('voluntario'),
   ConversationController.getQueue
 );
 router.get('/volunteer/dashboard',
   requireAuth,
-  requireRoles('voluntario', 'moderador', 'administrador'),
+  requireRoles('voluntario', 'administrador'),
   ConversationController.getDashboard
 );
 
 // ─── Rotas do Usuário ─────────────────────────────────────────────────────────
-router.post('/', requireAuth, ConversationController.create);               // Entrar na fila
-router.get('/', requireAuth, ConversationController.history);
-router.get('/:id/events', requireAuth, ConversationController.events);
-router.get('/:id', requireAuth, ConversationController.getById);            // Ver conversa + mensagens
-router.post('/:id/messages', requireAuth, ConversationController.sendMessage); // Enviar mensagem
-router.post('/:id/close', requireAuth, ConversationController.close);       // Encerrar atendimento
+router.post('/', requireAuth, requireRoles('cadastrado'), ConversationController.create);
+router.get('/', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.history);
+router.get('/:id/events', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.events);
+router.get('/:id', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.getById);
+router.post('/:id/messages', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.sendMessage);
+router.post('/:id/close', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.close);
 
 // ─── Rotas do Voluntário/Admin (dinâmicas com :id) ───────────────────────────
 router.post('/:id/accept',
   requireAuth,
-  requireRoles('voluntario', 'moderador', 'administrador'),
+  requireRoles('voluntario'),
   ConversationController.accept
 );
 router.post('/:id/risk-flags',
   requireAuth,
-  requireRoles('voluntario', 'moderador', 'administrador'),
+  requireRoles('voluntario'),
   ConversationController.flagRisk
 );
 

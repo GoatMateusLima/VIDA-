@@ -146,7 +146,7 @@ export class ReportService {
       throw new AppError("Erro ao listar denúncias: " + error.message, 400);
     }
 
-    return data;
+    return Promise.all((data || []).map((report) => this.withReportedAlias(report)));
   }
 
   static async getById(reportId: string) {
@@ -218,7 +218,8 @@ export class ReportService {
       });
     }
 
-    return { ...data, history };
+    const enriched = await this.withReportedAlias(data);
+    return { ...enriched, history };
   }
 
   /**
@@ -278,5 +279,15 @@ export class ReportService {
       { status },
     );
     return updatedReport;
+  }
+
+  private static async withReportedAlias(report: any) {
+    if (report.target_type !== "mensagem") return report;
+    const { data: message } = await supabaseAdmin
+      .from("community_messages")
+      .select("alias_snapshot")
+      .eq("id", report.target_id)
+      .maybeSingle();
+    return { ...report, reported_alias: message?.alias_snapshot ?? "Mensagem do grupo" };
   }
 }

@@ -19,6 +19,71 @@ import { AppError } from "../middlewares/errorMiddleware";
 import { AuditService } from "./AuditService";
 
 export class VolunteerService {
+  private static readonly MODERATOR_PREFIX = "[MODERADOR] ";
+
+  static async applyForModerator(userId: string, motivation: string, experience: string) {
+    const { data: user } = await supabaseAdmin.from("users").select("role").eq("id", userId).single();
+    if (user?.role !== "voluntario") throw new AppError("Somente voluntários podem se candidatar a moderador.", 403);
+    const { data: existing } = await supabaseAdmin
+      .from("volunteer_applications").select("id, status").eq("user_id", userId)
+      .like("motivation", `${this.MODERATOR_PREFIX}%`).in("status", ["pendente", "aprovada"]).maybeSingle();
+    if (existing) throw new AppError("Você já possui uma candidatura para moderador ativa.", 409);
+    const { data, error } = await supabaseAdmin.from("volunteer_applications").insert({
+      user_id: userId,
+      status: "pendente",
+      motivation: `${this.MODERATOR_PREFIX}${motivation}`,
+      experience,
+    }).select().single();
+    if (error) throw new AppError("Erro ao enviar candidatura para moderador: " + error.message, 400);
+    return this.normalizeModeratorApplication(data);
+  }
+
+  static async listModeratorApplications() {
+    const { data, error } = await supabaseAdmin.from("volunteer_applications")
+      .select("*, users(display_name, status)").like("motivation", `${this.MODERATOR_PREFIX}%`)
+      .order("created_at", { ascending: false });
+    if (error) throw new AppError("Erro ao listar candidaturas para moderador.", 400);
+    return (data || []).map((item) => this.normalizeModeratorApplication(parseApplicationFields(item)));
+  }
+
+  static async getMyModeratorApplication(userId: string) {
+    const { data, error } = await supabaseAdmin.from("volunteer_applications")
+      .select("*, users(display_name, status)").eq("user_id", userId)
+      .like("motivation", `${this.MODERATOR_PREFIX}%`).order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    if (error || !data) throw new AppError("Candidatura para moderador não encontrada.", 404);
+    return this.normalizeModeratorApplication(parseApplicationFields(data));
+  }
+
+  static async getModeratorApplication(applicationId: string) {
+    const { data, error } = await supabaseAdmin.from("volunteer_applications")
+      .select("*, users(display_name, status)").eq("id", applicationId)
+      .like("motivation", `${this.MODERATOR_PREFIX}%`).single();
+    if (error || !data) throw new AppError("Candidatura para moderador não encontrada.", 404);
+    return this.normalizeModeratorApplication(parseApplicationFields(data));
+  }
+
+  static async approveModeratorApplication(applicationId: string, reviewerId: string) {
+    const { data: app } = await supabaseAdmin.from("volunteer_applications").select("*")
+      .eq("id", applicationId).like("motivation", `${this.MODERATOR_PREFIX}%`).single();
+    if (!app) throw new AppError("Candidatura para moderador não encontrada.", 404);
+    if (app.status !== "pendente") throw new AppError("Esta candidatura já foi analisada.", 409);
+    const { data: candidate } = await supabaseAdmin.from("users").select("role").eq("id", app.user_id).single();
+    if (candidate?.role !== "voluntario") throw new AppError("O candidato não é um voluntário ativo.", 409);
+    const { error: appError } = await supabaseAdmin.from("volunteer_applications").update({
+      status: "aprovada", reviewer_id: reviewerId, reviewed_at: new Date().toISOString(),
+    }).eq("id", applicationId);
+    if (appError) throw new AppError("Erro ao aprovar candidatura.", 400);
+    const { data, error } = await supabaseAdmin.from("users").update({ role: "moderador" })
+      .eq("id", app.user_id).select().single();
+    if (error) throw new AppError("Erro ao promover voluntário para moderador.", 400);
+    await AuditService.record(reviewerId, "moderator.approved", "volunteer_application", applicationId, { user_id: app.user_id });
+    return data;
+  }
+
+  private static normalizeModeratorApplication(app: any) {
+    return { ...app, motivation: String(app.motivation || "").replace(this.MODERATOR_PREFIX, ""), application_type: "moderador" };
+  }
   static async listVolunteers() {
     const { data, error } = await supabaseAdmin
       .from("volunteer_profiles")
@@ -78,7 +143,8 @@ export class VolunteerService {
   ) {
     let query = supabaseAdmin
       .from("volunteer_applications")
-      .select("*, users(display_name, status)");
+      .select("*, users(display_name, status)")
+      .not("motivation", "like", `${this.MODERATOR_PREFIX}%`);
 
     if (status) {
       query = query.eq("status", status);
@@ -148,6 +214,9 @@ export class VolunteerService {
 
     if (appError || !app) {
       throw new AppError("Candidatura não encontrada", 404);
+    }
+    if (String(app.motivation || "").startsWith(this.MODERATOR_PREFIX)) {
+      throw new AppError("Use o fluxo de aprovação de moderadores.", 409);
     }
     if (app.status !== "pendente") {
       throw new AppError("Esta candidatura já foi analisada.", 409);

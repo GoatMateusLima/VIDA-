@@ -4,6 +4,56 @@ import { VolunteerService } from "../services/VolunteerService";
 import { AuthenticatedRequest } from "../types";
 
 export class AdminController {
+  static async applyForModerator(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const body = z.object({
+        motivation: z.string().trim().min(10),
+        experience: z.string().trim().min(5),
+      }).parse(req.body);
+      const data = await VolunteerService.applyForModerator(
+        req.user!.id,
+        body.motivation,
+        body.experience,
+      );
+      res.status(201).json({ status: "success", message: "Candidatura para moderador enviada.", data });
+    } catch (error) { next(error); }
+  }
+
+  static async getMyModeratorApplication(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await VolunteerService.getMyModeratorApplication(req.user!.id);
+      res.status(200).json({ status: "success", data });
+    } catch (error) { next(error); }
+  }
+
+  static async listModeratorApplications(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await VolunteerService.listModeratorApplications();
+      res.status(200).json({ status: "success", data });
+    } catch (error) { next(error); }
+  }
+
+  static async getModeratorApplication(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await VolunteerService.getModeratorApplication(req.params.id);
+      res.status(200).json({ status: "success", data });
+    } catch (error) { next(error); }
+  }
+
+  static async approveModerator(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await VolunteerService.approveModeratorApplication(req.params.id, req.user!.id);
+      res.status(200).json({ status: "success", message: "Candidatura aprovada. O voluntário agora é moderador.", data });
+    } catch (error) { next(error); }
+  }
+
+  static async rejectModerator(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const decision = z.object({ decision: z.string().trim().min(5).default("Candidatura recusada.") }).parse(req.body).decision;
+      const data = await VolunteerService.rejectApplication(req.params.id, req.user!.id, decision);
+      res.status(200).json({ status: "success", message: "Candidatura recusada.", data });
+    } catch (error) { next(error); }
+  }
   static async listVolunteers(
     req: AuthenticatedRequest,
     res: Response,

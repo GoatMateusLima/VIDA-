@@ -252,6 +252,9 @@ export class ConversationService {
       throw new AppError('Erro ao encerrar atendimento: ' + error.message, 400);
     }
 
+    // Se estava aguardando, notifica os voluntários para remover da fila em tempo real
+    PresenceService.broadcastQueue('queue_remove', { id: conversationId });
+
     return data;
   }
 

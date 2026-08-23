@@ -36,7 +36,12 @@ app.use(helmet({
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || corsOrigins.includes(origin)) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    const cleanOrigin = origin.trim().replace(/\/+$/, '');
+    if (corsOrigins.includes(cleanOrigin) || corsOrigins.includes('*')) {
       callback(null, true);
       return;
     }
@@ -49,6 +54,25 @@ app.use(cors({
 
 app.use(express.json({ limit: '32kb' }));
 app.use(apiLimiter);
+
+// Rotas raiz e de conveniência
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Backend Vida+ operacional',
+    health: '/api/health',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Backend Vida+ operacional',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use('/api', routes);
 app.use((_req, _res, next) => next(new AppError('Rota não encontrada.', 404)));
 app.use(errorMiddleware);

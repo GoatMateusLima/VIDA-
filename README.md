@@ -8,7 +8,7 @@ service role.
 
 ```text
 Local:   http://localhost:3000/api
-Render:  https://vida-43t9.onrender.com/api
+Render:  https://vida-server-9khr.onrender.com/api
 Health:  /api/health
 ```
 
@@ -37,7 +37,7 @@ SUPABASE_ANON_KEY=sua-anon-key
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 NODE_ENV=development
 MESSAGE_ENCRYPTION_KEY=
-CORS_ORIGINS=http://localhost:5173,https://vidafrontend.netlify.app
+CORS_ORIGINS=http://localhost:5173,https://vida-acolhimento-digital.netlify.app
 TRUST_PROXY=0
 PASSWORD_RESET_REDIRECT_URL=http://localhost:5173/recuperar-senha
 ```
@@ -47,8 +47,8 @@ Em producao no Render, use:
 ```env
 NODE_ENV=production
 TRUST_PROXY=1
-CORS_ORIGINS=https://vidafrontend.netlify.app,http://localhost:5173
-PASSWORD_RESET_REDIRECT_URL=https://vidafrontend.netlify.app/recuperar-senha
+CORS_ORIGINS=https://vida-acolhimento-digital.netlify.app,http://localhost:5173
+PASSWORD_RESET_REDIRECT_URL=https://vida-acolhimento-digital.netlify.app/recuperar-senha
 ```
 
 Gere `MESSAGE_ENCRYPTION_KEY` com:

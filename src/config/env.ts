@@ -51,5 +51,5 @@ if (
 
 export const env = parsed.data;
 export const corsOrigins = env.CORS_ORIGINS.split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);

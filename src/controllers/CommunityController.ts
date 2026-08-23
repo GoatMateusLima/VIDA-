@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AuthenticatedRequest } from '../types';
 import { CommunityService } from '../services/CommunityService';
+import { PresenceService } from '../services/PresenceService';
 
 export class CommunityController {
   static async adminList(req: AuthenticatedRequest, res: Response, next: NextFunction) {

@@ -21,7 +21,7 @@
  */
 
 import { Response, NextFunction } from 'express';
-import { supabase } from '../config/database';
+import { supabase, supabaseAdmin } from '../config/database';
 import { AuthenticatedRequest, UserRole } from '../types';
 import { AppError } from './errorMiddleware';
 
@@ -47,8 +47,8 @@ export async function requireAuth(
       throw new AppError('Sessão expirada ou token de acesso inválido', 401);
     }
 
-    // 3. Busca o cargo (role) do usuário na nossa tabela pública
-    const { data: dbUser, error: dbError } = await supabase
+    // 3. Busca o cargo (role) do usuário na nossa tabela pública usando supabaseAdmin (ignora RLS)
+    const { data: dbUser, error: dbError } = await supabaseAdmin
       .from('users')
       .select('role, display_name')
       .eq('id', user.id)

@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { ConversationService } from '../services/ConversationService';
 import { VolunteerService } from '../services/VolunteerService';
+import { PresenceService } from '../services/PresenceService';
 import { AuthenticatedRequest } from '../types';
 
 export class ConversationController {
@@ -66,6 +67,23 @@ export class ConversationController {
     }
   }
 
+  static async typing(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        res.status(401).json({ status: 'error', message: 'Não autenticado' });
+        return;
+      }
+      const { id } = req.params;
+      const { typing } = z.object({ typing: z.boolean() }).parse(req.body);
+      const alias = req.user.display_name || (req.user.role === 'voluntario' ? 'Voluntário' : 'Pessoa acolhida');
+
+      PresenceService.setTyping('conversation', id, req.user.id, alias, typing);
+      res.status(200).json({ status: 'success', data: { typing } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async events(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     if (!req.user) {
       res.status(401).json({ status: 'error', message: 'Não autenticado' });
@@ -83,6 +101,9 @@ export class ConversationController {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
     res.write('retry: 3000\n\n');
+
+    // Registra ouvinte para transmissões em tempo real (mensagens e digitação)
+    PresenceService.subscribeConversation(conversationId, res);
 
     const sendUpdates = async () => {
       if (closed) return;
@@ -204,6 +225,45 @@ export class ConversationController {
     } catch (error) {
       next(error);
     }
+  }
+
+  // SSE: notifica o voluntário em tempo real quando a fila muda
+  static async queueEvents(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    if (!req.user) {
+      res.status(401).json({ status: 'error', message: 'Não autenticado' });
+      return;
+    }
+
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    res.write('retry: 3000\n\n');
+
+    // Envia snapshot da fila atual assim que o voluntário conecta
+    try {
+      const currentQueue = await ConversationService.getQueue();
+      res.write(`event: queue_snapshot\ndata: ${JSON.stringify(currentQueue)}\n\n`);
+    } catch {
+      // ignora erro no snapshot inicial
+    }
+
+    // Registra como ouvinte de eventos futuros
+    PresenceService.subscribeQueue(res);
+
+    // Heartbeat a cada 20s para manter conexão viva
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 20_000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+    });
   }
 
   // Voluntário assume/aceita atendimento

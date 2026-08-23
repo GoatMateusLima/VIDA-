@@ -20,25 +20,42 @@ import { supabaseAdmin } from '../config/database';
 import { AppError } from '../middlewares/errorMiddleware';
 import { encryptMessage, decryptMessage } from '../utils/helpers';
 import { AuditService } from './AuditService';
+import { PresenceService } from './PresenceService';
 
 export class ConversationService {
   /**
    * Cria um novo atendimento para o usuário (entra na fila de espera).
-   * Verifica se já existe um atendimento ativo ou aguardando para evitar duplicatas.
+   * Se já existir um atendimento ativo ou aguardando, retorna-o para evitar bloqueio.
    *
    * @param userId - UUID do usuário que quer atendimento
    */
   static async create(userId: string) {
-    // Impede que o usuário entre na fila duas vezes
+    // Verifica se o usuário já está na fila ou em conversa ativa
     const { data: existing } = await supabaseAdmin
       .from('conversations')
-      .select('id')
+      .select('id, status, priority, created_at')
       .eq('user_id', userId)
       .in('status', ['aguardando', 'ativa'])
+      .order('created_at', { ascending: false })
       .maybeSingle();
 
     if (existing) {
-      throw new AppError('Você já possui um atendimento ativo ou aguardando na fila.', 400);
+      let queuePosition = 1;
+      let estimatedWaitMinutes = 4;
+      if (existing.status === 'aguardando') {
+        const { count: position } = await supabaseAdmin
+          .from('conversations')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'aguardando')
+          .lte('created_at', existing.created_at);
+        queuePosition = position || 1;
+        estimatedWaitMinutes = Math.max(2, queuePosition * 3);
+      }
+      return {
+        ...existing,
+        position: queuePosition,
+        estimated_wait_minutes: estimatedWaitMinutes,
+      };
     }
 
     const { data, error } = await supabaseAdmin
@@ -65,8 +82,18 @@ export class ConversationService {
 
     const queuePosition = position || 1;
     const volunteers = onlineVolunteers || 1;
-    // Estimativa simples: 5 minutos por posição dividido pelo nº de voluntários
     const estimatedWaitMinutes = Math.ceil((queuePosition * 5) / volunteers);
+
+    // Notifica todos os voluntários com SSE aberto que chegou uma nova entrada na fila
+    PresenceService.broadcastQueue('queue_entry', {
+      id: data.id,
+      status: data.status,
+      priority: data.priority,
+      created_at: data.created_at,
+      anonymous_name: `Pessoa aguardando ${queuePosition}`,
+      position: queuePosition,
+      estimatedWait: estimatedWaitMinutes,
+    });
 
     return {
       ...data,
@@ -173,6 +200,15 @@ export class ConversationService {
       throw new AppError('Erro ao enviar mensagem: ' + error.message, 400);
     }
 
+    // Desliga digitação do remetente
+    PresenceService.setTyping('conversation', conversationId, senderId, '', false);
+    // Transmite mensagem em tempo real para os ouvintes SSE da conversa
+    PresenceService.broadcastConversation(conversationId, 'message', {
+      ...data,
+      body: text,
+      body_encrypted: text,
+    });
+
     // Retorna com o texto original descriptografado para o frontend exibir imediatamente
     return { ...data, body: text };
   }
@@ -257,6 +293,17 @@ export class ConversationService {
       .from('volunteer_profiles')
       .update({ availability_status: 'ocupado' })
       .eq('user_id', volunteerId);
+
+    // Notifica o usuário (via SSE da conversa) que o voluntário aceitou
+    // O frontend em app.conversar.tsx escuta esse evento para navegar ao chat
+    PresenceService.broadcastConversation(conversationId, 'accepted', {
+      conversationId,
+      volunteerId,
+      startedAt: now,
+    });
+
+    // Notifica demais voluntários que essa conversa saiu da fila
+    PresenceService.broadcastQueue('queue_remove', { id: conversationId });
 
     return data;
   }

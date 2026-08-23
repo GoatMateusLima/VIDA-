@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../config/database';
 import { AppError } from '../middlewares/errorMiddleware';
 import { decryptMessage, encryptMessage } from '../utils/helpers';
 import { AuditService } from './AuditService';
+import { PresenceService } from './PresenceService';
 import { UserRole } from '../types';
 
 const ADJECTIVES = ['Calmo', 'Gentil', 'Solar', 'Sereno', 'Leve', 'Brilhante', 'Amigo', 'Livre'];
@@ -187,19 +188,46 @@ export class CommunityService {
       .order('name');
     if (error) throw new AppError('Erro ao buscar grupos.', 400);
 
-    if (!userId) return data || [];
-    const { data: memberships } = await supabaseAdmin
+    const communities = data || [];
+    const communityIds = communities.map((c) => c.id);
+
+    // Contagem agregada de membros ativos em cada grupo
+    const { data: memberRows } = await supabaseAdmin
       .from('community_members')
-      .select('community_id, alias')
-      .eq('user_id', userId)
+      .select('community_id')
+      .in('community_id', communityIds)
       .eq('status', 'ativo');
-    const memberMap = new Map((memberships || []).map((item) => [item.community_id, item.alias]));
-    return (data || []).map((community) => ({
-      ...community,
-      is_member: memberMap.has(community.id),   // snake_case consistente (Gap community #is_member)
-      joined: memberMap.has(community.id),       // alias de compatibilidade
-      my_alias: memberMap.get(community.id) ?? null,  // Gap #8
-    }));
+
+    const memberCountMap = new Map<string, number>();
+    for (const row of memberRows || []) {
+      memberCountMap.set(row.community_id, (memberCountMap.get(row.community_id) || 0) + 1);
+    }
+
+    let memberMap = new Map<string, string>();
+    if (userId) {
+      const { data: memberships } = await supabaseAdmin
+        .from('community_members')
+        .select('community_id, alias')
+        .eq('user_id', userId)
+        .eq('status', 'ativo');
+      memberMap = new Map((memberships || []).map((item) => [item.community_id, item.alias]));
+    }
+
+    return communities.map((community) => {
+      const count = memberCountMap.get(community.id) || 0;
+      const online = PresenceService.getCommunityOnlineCount(community.id);
+      return {
+        ...community,
+        member_count: count,
+        memberCount: count,
+        online_count: online,
+        onlineCount: online,
+        is_member: memberMap.has(community.id),
+        joined: memberMap.has(community.id),
+        my_alias: memberMap.get(community.id) ?? null,
+        myAlias: memberMap.get(community.id) ?? null,
+      };
+    });
   }
 
   static async join(communityId: string, userId: string) {
@@ -288,17 +316,25 @@ export class CommunityService {
       .select('id, community_id, alias_snapshot, created_at')
       .single();
     if (error) throw new AppError('Erro ao enviar mensagem ao grupo.', 400);
-    return {
+
+    const messageResult = {
       id: data.id,
       community_id: data.community_id,
       sender_id: userId,
       alias_snapshot: data.alias_snapshot,
       alias: data.alias_snapshot,
-      body: text,   // texto limpo original
-      text: text,   // alias extra para compatibilidade
+      body: text, // texto limpo original
+      text: text, // alias extra para compatibilidade
       is_mine: true,
       created_at: data.created_at,
     };
+
+    // Desliga digitação do remetente
+    PresenceService.setTyping('community', communityId, userId, member.alias, false);
+    // Broadcast em tempo real para os membros do grupo via SSE
+    PresenceService.broadcastCommunity(communityId, 'message', messageResult);
+
+    return messageResult;
   }
 
   static async revealIdentity(messageId: string, actorId: string, actorRole: UserRole, reason: string) {

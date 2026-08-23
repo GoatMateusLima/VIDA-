@@ -31,6 +31,11 @@ router.get('/volunteer/queue',
   requireRoles('voluntario'),
   ConversationController.getQueue
 );
+router.get('/volunteer/queue-events',
+  requireAuth,
+  requireRoles('voluntario', 'moderador', 'administrador'),
+  ConversationController.queueEvents
+);
 router.get('/volunteer/dashboard',
   requireAuth,
   requireRoles('voluntario', 'administrador'),
@@ -38,12 +43,13 @@ router.get('/volunteer/dashboard',
 );
 
 // ─── Rotas do Usuário ─────────────────────────────────────────────────────────
-router.post('/', requireAuth, requireRoles('cadastrado'), ConversationController.create);
-router.get('/', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.history);
-router.get('/:id/events', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.events);
-router.get('/:id', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.getById);
-router.post('/:id/messages', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.sendMessage);
-router.post('/:id/close', requireAuth, requireRoles('cadastrado', 'voluntario'), ConversationController.close);
+router.post('/', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.create);
+router.get('/', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.history);
+router.get('/:id/events', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.events);
+router.get('/:id', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.getById);
+router.post('/:id/messages', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.sendMessage);
+router.post('/:id/typing', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.typing);
+router.post('/:id/close', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.close);
 
 // ─── Rotas do Voluntário/Admin (dinâmicas com :id) ───────────────────────────
 router.post('/:id/accept',

@@ -23,6 +23,10 @@ router.delete(
 router.get('/', requireAuth, CommunityController.list);
 router.post('/:id/join', requireAuth, CommunityController.join);
 router.post('/:id/leave', requireAuth, CommunityController.leave);
+router.get('/:id/events', requireAuth, CommunityController.events);
+router.post('/:id/presence', requireAuth, CommunityController.presence);
+router.get('/:id/online-users', requireAuth, CommunityController.onlineUsers);
+router.post('/:id/typing', requireAuth, CommunityController.typing);
 router.get('/:id/messages', requireAuth, CommunityController.messages);
 router.post('/:id/messages', requireAuth, CommunityController.send);
 router.post(

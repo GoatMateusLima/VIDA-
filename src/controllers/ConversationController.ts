@@ -102,37 +102,40 @@ export class ConversationController {
     res.flushHeaders();
     res.write('retry: 3000\n\n');
 
-    // Registra ouvinte para transmissões em tempo real (mensagens e digitação)
+    // Envia mensagens acumuladas desde o último timestamp (se reconectando)
+    try {
+      const messages = await ConversationService.messagesAfter(
+        conversationId,
+        user.id,
+        user.role,
+        lastTimestamp
+      );
+      for (const message of messages) {
+        lastTimestamp = message.created_at;
+        res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);
+      }
+    } catch (error) {
+      // ignora erro no fetch inicial de histórico
+    }
+
+    // Registra ouvinte em memória para transmissões em tempo real (mensagens e digitação)
     PresenceService.subscribeConversation(conversationId, res);
 
-    const sendUpdates = async () => {
+    // Heartbeat a cada 20s para manter a conexão ativa sem onerar o banco de dados
+    const heartbeat = setInterval(() => {
       if (closed) return;
       try {
-        const messages = await ConversationService.messagesAfter(
-          conversationId,
-          user.id,
-          user.role,
-          lastTimestamp
-        );
-        for (const message of messages) {
-          lastTimestamp = message.created_at;
-          res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);
-        }
         res.write(`event: heartbeat\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
-      } catch (error) {
+      } catch {
         closed = true;
-        clearInterval(interval);
-        res.write(`event: error\ndata: ${JSON.stringify({ message: 'Canal encerrado.' })}\n\n`);
-        res.end();
+        clearInterval(heartbeat);
       }
-    };
+    }, 20000);
 
-    const interval = setInterval(sendUpdates, 2500);
     req.on('close', () => {
       closed = true;
-      clearInterval(interval);
+      clearInterval(heartbeat);
     });
-    await sendUpdates();
   }
 
   // Enviar mensagem

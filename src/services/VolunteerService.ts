@@ -40,7 +40,7 @@ export class VolunteerService {
 
   static async listModeratorApplications() {
     const { data, error } = await supabaseAdmin.from("volunteer_applications")
-      .select("*, users(display_name, status)").like("motivation", `${this.MODERATOR_PREFIX}%`)
+      .select("*, users:user_id(display_name, status)").like("motivation", `${this.MODERATOR_PREFIX}%`)
       .order("created_at", { ascending: false });
     if (error) throw new AppError("Erro ao listar candidaturas para moderador.", 400);
     return (data || []).map((item) => this.normalizeModeratorApplication(parseApplicationFields(item)));
@@ -48,7 +48,7 @@ export class VolunteerService {
 
   static async getMyModeratorApplication(userId: string) {
     const { data, error } = await supabaseAdmin.from("volunteer_applications")
-      .select("*, users(display_name, status)").eq("user_id", userId)
+      .select("*, users:user_id(display_name, status)").eq("user_id", userId)
       .like("motivation", `${this.MODERATOR_PREFIX}%`).order("created_at", { ascending: false })
       .limit(1).maybeSingle();
     if (error || !data) throw new AppError("Candidatura para moderador não encontrada.", 404);
@@ -57,7 +57,7 @@ export class VolunteerService {
 
   static async getModeratorApplication(applicationId: string) {
     const { data, error } = await supabaseAdmin.from("volunteer_applications")
-      .select("*, users(display_name, status)").eq("id", applicationId)
+      .select("*, users:user_id(display_name, status)").eq("id", applicationId)
       .like("motivation", `${this.MODERATOR_PREFIX}%`).single();
     if (error || !data) throw new AppError("Candidatura para moderador não encontrada.", 404);
     return this.normalizeModeratorApplication(parseApplicationFields(data));
@@ -84,11 +84,12 @@ export class VolunteerService {
   private static normalizeModeratorApplication(app: any) {
     return { ...app, motivation: String(app.motivation || "").replace(this.MODERATOR_PREFIX, ""), application_type: "moderador" };
   }
+
   static async listVolunteers() {
     const { data, error } = await supabaseAdmin
       .from("volunteer_profiles")
       .select(
-        "user_id, availability_status, training_status, total_chats, approved_at, users(display_name, status)",
+        "user_id, availability_status, training_status, total_chats, approved_at, users:user_id(display_name, status)",
       )
       .order("approved_at", { ascending: false });
 
@@ -143,7 +144,7 @@ export class VolunteerService {
   ) {
     let query = supabaseAdmin
       .from("volunteer_applications")
-      .select("*, users(display_name, status)")
+      .select("*, users:user_id(display_name, status)")
       .not("motivation", "like", `${this.MODERATOR_PREFIX}%`);
 
     if (status) {
@@ -164,7 +165,7 @@ export class VolunteerService {
   static async getMyApplication(userId: string) {
     const { data, error } = await supabaseAdmin
       .from("volunteer_applications")
-      .select("*, users(display_name, status)")
+      .select("*, users:user_id(display_name, status)")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -183,7 +184,7 @@ export class VolunteerService {
   static async getApplication(applicationId: string) {
     const { data, error } = await supabaseAdmin
       .from("volunteer_applications")
-      .select("*, users(display_name, status)")
+      .select("*, users:user_id(display_name, status)")
       .eq("id", applicationId)
       .single();
 

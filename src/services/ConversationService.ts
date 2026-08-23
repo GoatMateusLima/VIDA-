@@ -318,7 +318,7 @@ export class ConversationService {
   static async getQueue() {
     const { data, error } = await supabaseAdmin
       .from('conversations')
-      .select('id, status, priority, created_at, users(display_name)')
+      .select('id, status, priority, created_at, users:user_id(display_name)')
       .eq('status', 'aguardando')
       .order('created_at', { ascending: true }); // FIFO: primeiro que chegou, primeiro atendido
 

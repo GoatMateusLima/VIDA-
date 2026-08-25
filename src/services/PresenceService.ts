@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { supabaseAdmin } from '../config/database';
 
 interface PresenceEntry {
   userId: string;
@@ -205,16 +206,14 @@ export class PresenceService {
    * @param eventName - "queue_update" | "queue_entry" | "queue_remove"
    * @param data      - payload do evento
    */
-  static broadcastQueue(eventName: string, data: any) {
-    if (this.queueSSEListeners.size === 0) return;
-    const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of this.queueSSEListeners) {
-      try {
-        res.write(payload);
-      } catch {
-        this.queueSSEListeners.delete(res);
-      }
-    }
+  static async broadcastQueue(eventName: string, data: any) {
+    const channel = supabaseAdmin.channel('volunteer:queue');
+    await channel.send({
+      type: 'broadcast',
+      event: eventName,
+      payload: data,
+    });
+    supabaseAdmin.removeChannel(channel);
   }
 
   // ─── SSE SUBSCRIPTIONS & BROADCASTS ────────────────────────────────────────
@@ -230,18 +229,14 @@ export class PresenceService {
     });
   }
 
-  static broadcastCommunity(communityId: string, eventName: string, data: any) {
-    const listeners = this.communitySSEListeners.get(communityId);
-    if (!listeners || listeners.size === 0) return;
-
-    const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of listeners) {
-      try {
-        res.write(payload);
-      } catch {
-        listeners.delete(res);
-      }
-    }
+  static async broadcastCommunity(communityId: string, eventName: string, data: any) {
+    const channel = supabaseAdmin.channel(`community:${communityId}`);
+    await channel.send({
+      type: 'broadcast',
+      event: eventName,
+      payload: data,
+    });
+    supabaseAdmin.removeChannel(channel);
   }
 
   static subscribeConversation(conversationId: string, res: Response) {
@@ -255,18 +250,14 @@ export class PresenceService {
     });
   }
 
-  static broadcastConversation(conversationId: string, eventName: string, data: any) {
-    const listeners = this.conversationSSEListeners.get(conversationId);
-    if (!listeners || listeners.size === 0) return;
-
-    const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of listeners) {
-      try {
-        res.write(payload);
-      } catch {
-        listeners.delete(res);
-      }
-    }
+  static async broadcastConversation(conversationId: string, eventName: string, data: any) {
+    const channel = supabaseAdmin.channel(`conversation:${conversationId}`);
+    await channel.send({
+      type: 'broadcast',
+      event: eventName,
+      payload: data,
+    });
+    supabaseAdmin.removeChannel(channel);
   }
 
   // ─── LIMPEZA DE SESSÕES EXPIRADAS ──────────────────────────────────────────

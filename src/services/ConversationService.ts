@@ -163,8 +163,9 @@ export class ConversationService {
    * @param conversationId - UUID da conversa
    * @param senderId       - UUID do remetente
    * @param text           - Texto original da mensagem
+   * @param replyToId      - UUID opcional da mensagem que está sendo respondida
    */
-  static async sendMessage(conversationId: string, senderId: string, role: string, text: string) {
+  static async sendMessage(conversationId: string, senderId: string, role: string, text: string, replyToId?: string) {
     // Valida que a conversa está ativa antes de permitir envio
     const { data: conversation, error: convErr } = await supabaseAdmin
       .from('conversations')
@@ -192,7 +193,13 @@ export class ConversationService {
 
     const { data, error } = await supabaseAdmin
       .from('messages')
-      .insert({ conversation_id: conversationId, sender_id: senderId, body_encrypted: bodyEncrypted, type: 'text' })
+      .insert({
+        conversation_id: conversationId,
+        sender_id: senderId,
+        body_encrypted: bodyEncrypted,
+        type: 'text',
+        reply_to_id: replyToId || null,
+      })
       .select()
       .single();
 

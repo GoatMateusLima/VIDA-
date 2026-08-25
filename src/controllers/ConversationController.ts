@@ -149,10 +149,11 @@ export class ConversationController {
       const { id } = req.params;
       const schema = z.object({
         text: z.string().trim().min(1, 'A mensagem não pode ser vazia').max(4000),
+        replyToId: z.string().uuid().optional(),
       });
 
       const body = schema.parse(req.body);
-      const data = await ConversationService.sendMessage(id, req.user.id, req.user.role, body.text);
+      const data = await ConversationService.sendMessage(id, req.user.id, req.user.role, body.text, body.replyToId);
 
       res.status(201).json({
         status: 'success',

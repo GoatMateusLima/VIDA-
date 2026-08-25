@@ -86,6 +86,7 @@ export interface Message {
   type: string;             // 'text', 'system', 'media'
   created_at: string;
   deleted_at?: string;      // Soft delete para manter histórico de auditoria
+  reply_to_id?: string;     // UUID da mensagem que está sendo respondida
 }
 
 // ─── Estrutura da tabela public.risk_flags ───────────────────────────────────

@@ -206,14 +206,22 @@ export class PresenceService {
    * @param eventName - "queue_update" | "queue_entry" | "queue_remove"
    * @param data      - payload do evento
    */
-  static async broadcastQueue(eventName: string, data: any) {
+  static broadcastQueue(eventName: string, data: any) {
     const channel = supabaseAdmin.channel('volunteer:queue');
-    await channel.send({
-      type: 'broadcast',
-      event: eventName,
-      payload: data,
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: eventName,
+          payload: data,
+        }).then(() => {
+          supabaseAdmin.removeChannel(channel);
+        }).catch((err) => {
+          console.error('Erro ao enviar broadcastQueue:', err);
+          supabaseAdmin.removeChannel(channel);
+        });
+      }
     });
-    supabaseAdmin.removeChannel(channel);
   }
 
   // ─── SSE SUBSCRIPTIONS & BROADCASTS ────────────────────────────────────────
@@ -229,14 +237,22 @@ export class PresenceService {
     });
   }
 
-  static async broadcastCommunity(communityId: string, eventName: string, data: any) {
+  static broadcastCommunity(communityId: string, eventName: string, data: any) {
     const channel = supabaseAdmin.channel(`community:${communityId}`);
-    await channel.send({
-      type: 'broadcast',
-      event: eventName,
-      payload: data,
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: eventName,
+          payload: data,
+        }).then(() => {
+          supabaseAdmin.removeChannel(channel);
+        }).catch((err) => {
+          console.error('Erro ao enviar broadcastCommunity:', err);
+          supabaseAdmin.removeChannel(channel);
+        });
+      }
     });
-    supabaseAdmin.removeChannel(channel);
   }
 
   static subscribeConversation(conversationId: string, res: Response) {
@@ -250,14 +266,22 @@ export class PresenceService {
     });
   }
 
-  static async broadcastConversation(conversationId: string, eventName: string, data: any) {
+  static broadcastConversation(conversationId: string, eventName: string, data: any) {
     const channel = supabaseAdmin.channel(`conversation:${conversationId}`);
-    await channel.send({
-      type: 'broadcast',
-      event: eventName,
-      payload: data,
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: eventName,
+          payload: data,
+        }).then(() => {
+          supabaseAdmin.removeChannel(channel);
+        }).catch((err) => {
+          console.error('Erro ao enviar broadcastConversation:', err);
+          supabaseAdmin.removeChannel(channel);
+        });
+      }
     });
-    supabaseAdmin.removeChannel(channel);
   }
 
   // ─── LIMPEZA DE SESSÕES EXPIRADAS ──────────────────────────────────────────

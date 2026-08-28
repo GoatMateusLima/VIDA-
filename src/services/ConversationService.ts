@@ -227,7 +227,7 @@ export class ConversationService {
    * @param userId         - UUID de quem está encerrando
    * @param closedReason   - Ex: 'usuario_encerrou', 'voluntario_encerrou'
    */
-  static async close(conversationId: string, userId: string, role: string, closedReason: string) {
+  static async close(conversationId: string, userId: string, role: string, closedReason: string, notes?: string) {
     const { data: conversation, error: convErr } = await supabaseAdmin
       .from('conversations')
       .select('*')
@@ -248,9 +248,19 @@ export class ConversationService {
       throw new AppError('Este atendimento já foi encerrado.', 409);
     }
 
+    const updatePayload: Record<string, any> = {
+      status: 'encerrada',
+      ended_at: new Date().toISOString(),
+      closed_reason: closedReason,
+      updated_at: new Date().toISOString(),
+    };
+    if (notes && notes.trim().length > 0) {
+      updatePayload.volunteer_notes = notes.trim();
+    }
+
     const { data, error } = await supabaseAdmin
       .from('conversations')
-      .update({ status: 'encerrada', ended_at: new Date().toISOString(), closed_reason: closedReason, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', conversationId)
       .select()
       .single();

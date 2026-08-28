@@ -175,10 +175,11 @@ export class ConversationController {
       const { id } = req.params;
       const schema = z.object({
         reason: z.string().trim().min(1, 'O motivo de encerramento é obrigatório').max(100),
+        notes: z.string().trim().max(5000).optional(),
       });
 
       const body = schema.parse(req.body);
-      const data = await ConversationService.close(id, req.user.id, req.user.role, body.reason);
+      const data = await ConversationService.close(id, req.user.id, req.user.role, body.reason, body.notes);
 
       res.status(200).json({
         status: 'success',

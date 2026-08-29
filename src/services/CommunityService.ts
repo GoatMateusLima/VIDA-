@@ -181,6 +181,19 @@ export class CommunityService {
   }
 
   static async list(userId?: string) {
+    // Garante que o grupo "vida+" exista e a equipe esteja inserida nele
+    await this.ensureVidaPlusGroup();
+
+    let userRole: string | null = null;
+    if (userId) {
+      const { data: user } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      userRole = user?.role ?? null;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('communities')
       .select('id, name, description, rules_json, created_at')
@@ -188,7 +201,13 @@ export class CommunityService {
       .order('name');
     if (error) throw new AppError('Erro ao buscar grupos.', 400);
 
-    const communities = data || [];
+    let communities = data || [];
+
+    // Filtra o grupo "vida+" para usuários comuns
+    if (!userRole || !['voluntario', 'moderador', 'administrador'].includes(userRole)) {
+      communities = communities.filter(c => c.name.toLowerCase() !== 'vida+');
+    }
+
     const communityIds = communities.map((c) => c.id);
 
     // Contagem agregada de membros ativos em cada grupo
@@ -233,11 +252,22 @@ export class CommunityService {
   static async join(communityId: string, userId: string) {
     const { data: community } = await supabaseAdmin
       .from('communities')
-      .select('id, status')
+      .select('id, name, status')
       .eq('id', communityId)
       .single();
     if (!community || community.status !== 'ativo') {
       throw new AppError('Grupo não encontrado.', 404);
+    }
+
+    if (community.name.toLowerCase() === 'vida+') {
+      const { data: user } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      if (!user || !['voluntario', 'moderador', 'administrador'].includes(user.role)) {
+        throw new AppError('Apenas membros da equipe podem participar deste grupo.', 403);
+      }
     }
 
     const { data: existing } = await supabaseAdmin
@@ -381,7 +411,86 @@ export class CommunityService {
     };
   }
 
+  static async ensureVidaPlusGroup() {
+    try {
+      let { data: community } = await supabaseAdmin
+        .from('communities')
+        .select('id')
+        .eq('name', 'vida+')
+        .maybeSingle();
+
+      if (!community) {
+        const { data: newCommunity, error: createErr } = await supabaseAdmin
+          .from('communities')
+          .insert({
+            name: 'vida+',
+            description: 'Grupo exclusivo para a equipe da plataforma (Administradores, Moderadores e Voluntários).',
+            rules_json: ['Mantenha o respeito', 'Sigilo profissional absoluto'],
+            status: 'ativo'
+          })
+          .select('id')
+          .single();
+        if (createErr) return;
+        community = newCommunity;
+      }
+
+      if (community) {
+        const { data: teamUsers } = await supabaseAdmin
+          .from('users')
+          .select('id, nickname')
+          .in('role', ['voluntario', 'moderador', 'administrador']);
+
+        const { data: currentMembers } = await supabaseAdmin
+          .from('community_members')
+          .select('user_id, status')
+          .eq('community_id', community.id);
+
+        const memberMap = new Map(currentMembers?.map(m => [m.user_id, m.status]));
+
+        for (const user of teamUsers || []) {
+          const status = memberMap.get(user.id);
+          if (status !== 'ativo') {
+            const alias = user.nickname?.trim() || createAlias();
+            await supabaseAdmin
+              .from('community_members')
+              .upsert({
+                community_id: community.id,
+                user_id: user.id,
+                alias,
+                role: 'membro',
+                status: 'ativo'
+              });
+          }
+        }
+      }
+    } catch (e) {
+      // Falha silenciosa
+    }
+  }
+
   private static async requireMember(communityId: string, userId: string) {
+    const { data: community } = await supabaseAdmin
+      .from('communities')
+      .select('name')
+      .eq('id', communityId)
+      .single();
+
+    if (community && community.name.toLowerCase() === 'vida+') {
+      const { data: user } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      if (!user || !['voluntario', 'moderador', 'administrador'].includes(user.role)) {
+        await supabaseAdmin
+          .from('community_members')
+          .update({ status: 'saiu' })
+          .eq('community_id', communityId)
+          .eq('user_id', userId);
+        throw new AppError('Apenas membros da equipe podem participar deste grupo.', 403);
+      }
+    }
+
     const { data } = await supabaseAdmin
       .from('community_members')
       .select('alias, role, status')

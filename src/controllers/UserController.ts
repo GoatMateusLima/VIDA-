@@ -95,6 +95,43 @@ export class UserController {
     }
   }
 
+  static async banUser(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const body = z
+        .object({
+          ban: z.boolean(),
+        })
+        .parse(req.body);
+      const data = await UserService.banUser(req.params.id, body.ban);
+      res
+        .status(200)
+        .json({
+          status: "success",
+          message: body.ban ? "Usuário banido com sucesso." : "Usuário desbanido com sucesso.",
+          data,
+        });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getUserDetails(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const data = await UserService.getUserDetails(req.params.id);
+      res.status(200).json({ status: "success", data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Cadastra um novo usuário na plataforma.
    * Cria a conta no Supabase Auth e, via trigger, nas tabelas públicas.

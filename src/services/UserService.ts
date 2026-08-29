@@ -99,6 +99,48 @@ export class UserService {
     return { ...data, email: authUser.user?.email || "" };
   }
 
+  static async banUser(userId: string, ban: boolean) {
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .update({ status: ban ? "banido" : "ativo", updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .select("id, display_name, role, status, created_at, updated_at")
+      .single();
+
+    if (error || !data) {
+      throw new AppError("Erro ao alterar status de banimento do usuário.", 400);
+    }
+
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    return { ...data, email: authUser.user?.email || "" };
+  }
+
+  static async getUserDetails(userId: string) {
+    const { data: user, error } = await supabaseAdmin
+      .from("users")
+      .select("id, display_name, role, status, created_at, updated_at")
+      .eq("id", userId)
+      .single();
+
+    if (error || !user) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from("user_profiles")
+      .select("nickname, birth_year, state, preferences_json")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+    return {
+      ...user,
+      email: authUser.user?.email || "",
+      profile: profile || null,
+    };
+  }
+
   /**
    * Registra um novo usuário no Supabase Auth.
    * O trigger SQL `on_auth_user_created` cria automaticamente o registro

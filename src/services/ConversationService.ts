@@ -241,8 +241,8 @@ export class ConversationService {
       throw new AppError('Atendimento não encontrado.', 404);
     }
 
-    if (conversation.status !== 'ativa') {
-      throw new AppError('Você só pode enviar mensagens em conversas ativas.', 400);
+    if (!['ativa', 'sinalizada'].includes(conversation.status)) {
+      throw new AppError('Você só pode enviar mensagens em conversas ativas ou sinalizadas.', 400);
     }
     const canSend =
       conversation.user_id === senderId ||

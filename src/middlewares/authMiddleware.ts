@@ -48,11 +48,32 @@ export async function requireAuth(
     }
 
     // 3. Busca o cargo (role) do usuário na nossa tabela pública usando supabaseAdmin (ignora RLS)
-    const { data: dbUser, error: dbError } = await supabaseAdmin
+    let { data: dbUser, error: dbError } = await supabaseAdmin
       .from('users')
       .select('role, display_name')
       .eq('id', user.id)
       .single();
+
+    // Se o usuário autenticado não possuir registro na tabela pública public.users, cria automaticamente
+    if (dbError || !dbUser) {
+      const displayName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário';
+      const role = user.user_metadata?.role || 'voluntario'; // Fallback para voluntario em desenvolvimento
+
+      const { data: newUser, error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: user.id,
+          display_name: displayName,
+          role: role,
+        })
+        .select('role, display_name')
+        .single();
+
+      if (!insertError && newUser) {
+        dbUser = newUser;
+        dbError = null;
+      }
+    }
 
     if (dbUser?.role === 'anonimo') {
       throw new AppError('Crie uma conta para continuar.', 403);

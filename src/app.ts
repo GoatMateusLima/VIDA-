@@ -41,10 +41,28 @@ app.use(cors({
       return;
     }
     const cleanOrigin = origin.trim().replace(/\/+$/, '');
+    
     if (corsOrigins.includes(cleanOrigin) || corsOrigins.includes('*')) {
       callback(null, true);
       return;
     }
+
+    // Permite qualquer porta local (localhost e 127.0.0.1)
+    if (/^https?:\/\/localhost(:\d+)?$/.test(cleanOrigin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(cleanOrigin)) {
+      callback(null, true);
+      return;
+    }
+
+    // Permite subdomínios da Vercel e Netlify
+    if (
+      cleanOrigin.endsWith('.vercel.app') ||
+      cleanOrigin.endsWith('.netlify.app') ||
+      cleanOrigin === 'https://vercel.com'
+    ) {
+      callback(null, true);
+      return;
+    }
+
     callback(new Error('Origem não permitida pelo CORS'));
   },
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],

@@ -65,12 +65,49 @@ export class ReportService {
     return report;
   }
 
+  static async resolveTargetUserId(targetLabel: string) {
+    const normalizedLabel = targetLabel.trim();
+    if (!normalizedLabel) {
+      throw new AppError("Informe o usuário denunciado.", 400);
+    }
+
+    const maybeUuid = /^[0-9a-fA-F-]{36}$/.test(normalizedLabel);
+    if (maybeUuid) {
+      const { data: userById } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("id", normalizedLabel)
+        .maybeSingle();
+
+      if (userById) return userById.id;
+    }
+
+    const { data: profileMatch } = await supabaseAdmin
+      .from("user_profiles")
+      .select("user_id")
+      .ilike("nickname", normalizedLabel)
+      .maybeSingle();
+
+    if (profileMatch?.user_id) return profileMatch.user_id;
+
+    const { data: userMatch } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .ilike("display_name", normalizedLabel)
+      .maybeSingle();
+
+    if (userMatch?.id) return userMatch.id;
+
+    throw new AppError("Não foi possível localizar o usuário denunciado. Informe um apelido ou ID válido.", 400);
+  }
+
   static async createFromLabel(
     reporterId: string,
     targetLabel: string,
     reason: string,
     description?: string,
   ) {
+    const targetUserId = await this.resolveTargetUserId(targetLabel);
     const details = [
       `Alvo informado pela interface: ${targetLabel}`,
       description,
@@ -78,7 +115,7 @@ export class ReportService {
       .filter(Boolean)
       .join("\n\n");
 
-    return this.create(reporterId, "usuario", reporterId, reason, details);
+    return this.create(reporterId, "usuario", targetUserId, reason, details);
   }
 
   /**

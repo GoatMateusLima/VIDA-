@@ -18,6 +18,7 @@ import { supabase, supabaseAdmin } from "../config/database";
 import { env } from "../config/env";
 import { AppError } from "../middlewares/errorMiddleware";
 import { UserRole } from "../types";
+import { CommunityService } from "./CommunityService";
 
 export class UserService {
   static async listSafeUsers() {
@@ -87,6 +88,10 @@ export class UserService {
           risk_level_allowed: "baixo",
           total_chats: 0
         });
+    }
+
+    if (["moderador", "administrador"].includes(role)) {
+      await CommunityService.ensureStaffInAllCommunities(userId);
     }
 
     const { data: authUser } =

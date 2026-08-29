@@ -100,6 +100,37 @@ export class CommunityService {
     };
   }
 
+  static async ensureStaffInAllCommunities(userId: string) {
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name, role, status')
+      .eq('id', userId)
+      .single();
+
+    if (!user || !['moderador', 'administrador'].includes(user.role) || user.status !== 'ativo') {
+      return;
+    }
+
+    const { data: communities } = await supabaseAdmin
+      .from('communities')
+      .select('id')
+      .eq('status', 'ativo');
+
+    if (!communities || communities.length === 0) return;
+
+    const memberships = communities.map((community) => ({
+      community_id: community.id,
+      user_id: user.id,
+      alias: user.display_name?.trim() || createAlias(),
+      role: 'membro',
+      status: 'ativo',
+    }));
+
+    await supabaseAdmin
+      .from('community_members')
+      .upsert(memberships, { onConflict: 'community_id,user_id' });
+  }
+
   static async adminCreate(
     actorId: string,
     input: { name: string; description?: string; rules: string[] }

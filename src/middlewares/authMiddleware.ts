@@ -65,8 +65,9 @@ export async function requireAuth(
           id: user.id,
           display_name: displayName,
           role: role,
+          status: 'ativo',
         })
-        .select('role, display_name')
+        .select('role, display_name, status')
         .single();
 
       if (!insertError && newUser) {
@@ -91,6 +92,7 @@ export async function requireAuth(
         email: user.email,
         role: 'cadastrado',
         display_name: 'Usuário',
+        status: 'ativo',
       };
     } else {
       req.user = {
@@ -98,6 +100,7 @@ export async function requireAuth(
         email: user.email,
         role: dbUser.role as UserRole,
         display_name: dbUser.display_name,
+        status: dbUser.status,
       };
     }
 

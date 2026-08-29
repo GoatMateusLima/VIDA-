@@ -26,6 +26,7 @@ export interface UserPayload {
   email?: string;     // E-mail (pode ser ausente para usuários anônimos)
   role: UserRole;     // Cargo/papel do usuário na plataforma
   display_name?: string;
+  status?: string;    // Estado da conta (ativo, banido, etc.)
 }
 
 // ─── Extensão do Request do Express ──────────────────────────────────────────

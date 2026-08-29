@@ -119,29 +119,26 @@ export class ConversationService {
       return existing;
     }
 
-    // 2. Valida papéis no banco de dados para garantir que ambos pertencem à equipe
-    const { data: usersData, error: rolesErr } = await supabaseAdmin
+    // 2. Valida que ambos os usuários pertencem à equipe
+    const { data: user1Data } = await supabaseAdmin
       .from('users')
       .select('id, role')
-      .in('id', [user1Id, user2Id]);
+      .eq('id', user1Id)
+      .single();
 
-    if (rolesErr || !usersData || usersData.length < 2) {
-      // Se for uma conversa com si mesmo (para testes ou anotações)
-      if (user1Id === user2Id && usersData && usersData.length === 1) {
-        const role = usersData[0].role;
-        if (!['voluntario', 'moderador', 'administrador'].includes(role)) {
-          throw new AppError('Apenas membros da equipe podem participar de chats privados de equipe.', 403);
-        }
-      } else {
-        throw new AppError('Membros da equipe não encontrados ou inválidos.', 404);
-      }
-    } else {
-      const roles = usersData.map(u => u.role);
-      const isValidTeamChat = roles.every(role => ['voluntario', 'moderador', 'administrador'].includes(role));
+    const { data: user2Data } = await supabaseAdmin
+      .from('users')
+      .select('id, role')
+      .eq('id', user2Id)
+      .single();
 
-      if (!isValidTeamChat) {
-        throw new AppError('Apenas membros da equipe podem participar de chats privados de equipe.', 403);
-      }
+    const teamRoles = ['voluntario', 'moderador', 'administrador'];
+
+    if (!user1Data || !teamRoles.includes(user1Data.role)) {
+      throw new AppError('Apenas membros da equipe podem iniciar chats de equipe.', 403);
+    }
+    if (!user2Data || !teamRoles.includes(user2Data.role)) {
+      throw new AppError('O destinatário não é um membro da equipe.', 403);
     }
 
     const now = new Date().toISOString();
@@ -185,7 +182,6 @@ export class ConversationService {
       throw new AppError('Atendimento não encontrado', 404);
     }
 
-    // Controle de acesso: só participantes diretos ou papéis privilegiados podem ver
     const isParticipant = conversation.user_id === userId;
     const isAssignedVolunteer = conversation.volunteer_id === userId;
     const isPrivileged = ['moderador', 'administrador'].includes(role);

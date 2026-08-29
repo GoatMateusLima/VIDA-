@@ -103,6 +103,70 @@ export class ConversationService {
   }
 
   /**
+   * Cria ou recupera um chat privado entre dois membros da equipe.
+   * Valida estritamente se ambos pertencem à equipe para evitar brechas de segurança.
+   */
+  static async createTeamChat(user1Id: string, user2Id: string) {
+    // 1. Verifica se já existe um chat de equipe entre ambos
+    const { data: existing } = await supabaseAdmin
+      .from('conversations')
+      .select('*')
+      .eq('is_team_chat', true)
+      .or(`and(user_id.eq.${user1Id},volunteer_id.eq.${user2Id}),and(user_id.eq.${user2Id},volunteer_id.eq.${user1Id})`)
+      .maybeSingle();
+
+    if (existing) {
+      return existing;
+    }
+
+    // 2. Valida papéis no banco de dados para garantir que ambos pertencem à equipe
+    const { data: usersData, error: rolesErr } = await supabaseAdmin
+      .from('users')
+      .select('id, role')
+      .in('id', [user1Id, user2Id]);
+
+    if (rolesErr || !usersData || usersData.length < 2) {
+      // Se for uma conversa com si mesmo (para testes ou anotações)
+      if (user1Id === user2Id && usersData && usersData.length === 1) {
+        const role = usersData[0].role;
+        if (!['voluntario', 'moderador', 'administrador'].includes(role)) {
+          throw new AppError('Apenas membros da equipe podem participar de chats privados de equipe.', 403);
+        }
+      } else {
+        throw new AppError('Membros da equipe não encontrados ou inválidos.', 404);
+      }
+    } else {
+      const roles = usersData.map(u => u.role);
+      const isValidTeamChat = roles.every(role => ['voluntario', 'moderador', 'administrador'].includes(role));
+
+      if (!isValidTeamChat) {
+        throw new AppError('Apenas membros da equipe podem participar de chats privados de equipe.', 403);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from('conversations')
+      .insert({
+        user_id: user1Id,
+        volunteer_id: user2Id,
+        status: 'ativa',
+        is_team_chat: true,
+        priority: 'normal',
+        started_at: now,
+        updated_at: now
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppError('Erro ao iniciar chat privado de equipe: ' + error.message, 400);
+    }
+
+    return data;
+  }
+
+  /**
    * Retorna os detalhes de um atendimento, incluindo as mensagens descriptografadas.
    * Valida o controle de acesso antes de retornar qualquer dado.
    *
@@ -227,7 +291,7 @@ export class ConversationService {
    * @param userId         - UUID de quem está encerrando
    * @param closedReason   - Ex: 'usuario_encerrou', 'voluntario_encerrou'
    */
-  static async close(conversationId: string, userId: string, role: string, closedReason: string) {
+  static async close(conversationId: string, userId: string, role: string, closedReason: string, notes?: string) {
     const { data: conversation, error: convErr } = await supabaseAdmin
       .from('conversations')
       .select('*')
@@ -248,9 +312,19 @@ export class ConversationService {
       throw new AppError('Este atendimento já foi encerrado.', 409);
     }
 
+    const updatePayload: Record<string, any> = {
+      status: 'encerrada',
+      ended_at: new Date().toISOString(),
+      closed_reason: closedReason,
+      updated_at: new Date().toISOString(),
+    };
+    if (notes && notes.trim().length > 0) {
+      updatePayload.volunteer_notes = notes.trim();
+    }
+
     const { data, error } = await supabaseAdmin
       .from('conversations')
-      .update({ status: 'encerrada', ended_at: new Date().toISOString(), closed_reason: closedReason, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', conversationId)
       .select()
       .single();
@@ -327,6 +401,7 @@ export class ConversationService {
       .from('conversations')
       .select('id, status, priority, created_at, users:user_id(display_name)')
       .eq('status', 'aguardando')
+      .eq('is_team_chat', false)
       .order('created_at', { ascending: true }); // FIFO: primeiro que chegou, primeiro atendido
 
     if (error) {
@@ -402,7 +477,8 @@ export class ConversationService {
       .from('conversations')
       .select('id, user_id, volunteer_id, status, priority, started_at, ended_at, closed_reason, created_at, updated_at', {
         count: 'exact',
-      });
+      })
+      .eq('is_team_chat', false);
 
     if (!['moderador', 'administrador'].includes(role)) {
       query = role === 'voluntario'

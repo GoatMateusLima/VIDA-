@@ -20,6 +20,20 @@ import { requireAuth, requireRoles } from "../middlewares/authMiddleware";
 const router = Router();
 
 router.get(
+  "/",
+  requireAuth,
+  requireRoles("voluntario", "moderador", "administrador"),
+  UserController.listSafeUsers,
+);
+
+router.get(
+  "/team",
+  requireAuth,
+  requireRoles("voluntario", "moderador", "administrador"),
+  UserController.listTeamUsers,
+);
+
+router.get(
   "/admin",
   requireAuth,
   requireRoles("administrador"),

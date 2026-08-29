@@ -20,6 +20,31 @@ import { AppError } from "../middlewares/errorMiddleware";
 import { UserRole } from "../types";
 
 export class UserService {
+  static async listSafeUsers() {
+    const { data: users, error } = await supabaseAdmin
+      .from("users")
+      .select("id, display_name, role, status")
+      .order("display_name", { ascending: true });
+
+    if (error) {
+      throw new AppError("Erro ao listar usuários: " + error.message, 400);
+    }
+    return users;
+  }
+
+  static async listTeamUsers() {
+    const { data: users, error } = await supabaseAdmin
+      .from("users")
+      .select("id, display_name, role, status")
+      .in("role", ["voluntario", "moderador", "administrador"])
+      .order("display_name", { ascending: true });
+
+    if (error) {
+      throw new AppError("Erro ao listar membros da equipe: " + error.message, 400);
+    }
+    return users;
+  }
+
   static async listUsers() {
     const { data: users, error } = await supabaseAdmin
       .from("users")

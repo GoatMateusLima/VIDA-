@@ -20,6 +20,7 @@
 
 import { Router } from "express";
 import { AdminController } from "../controllers/AdminController";
+import { VolunteerReportController } from "../controllers/VolunteerReportController";
 import { requireAuth, requireRoles } from "../middlewares/authMiddleware";
 
 const router = Router();
@@ -119,6 +120,32 @@ router.post(
   requireAuth,
   requireRoles("administrador"),
   AdminController.rejectModerator,
+);
+
+// ─── Relatórios de Voluntários (Volunteer Reports) ───────────────────────────
+router.post(
+  "/volunteers/reports",
+  requireAuth,
+  requireRoles("voluntario"),
+  VolunteerReportController.create,
+);
+router.get(
+  "/volunteers/reports/me",
+  requireAuth,
+  requireRoles("voluntario"),
+  VolunteerReportController.listMine,
+);
+router.get(
+  "/volunteers/reports",
+  requireAuth,
+  requireRoles("administrador"),
+  VolunteerReportController.listAll,
+);
+router.post(
+  "/volunteers/reports/:id/respond",
+  requireAuth,
+  requireRoles("administrador"),
+  VolunteerReportController.respond,
 );
 
 export default router;

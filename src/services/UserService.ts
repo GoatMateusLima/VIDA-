@@ -77,6 +77,18 @@ export class UserService {
       throw new AppError("Erro ao atualizar papel do usuario.", 400);
     }
 
+    if (role === "voluntario") {
+      await supabaseAdmin
+        .from("volunteer_profiles")
+        .upsert({
+          user_id: userId,
+          availability_status: "online",
+          training_status: "concluido",
+          risk_level_allowed: "baixo",
+          total_chats: 0
+        });
+    }
+
     const { data: authUser } =
       await supabaseAdmin.auth.admin.getUserById(userId);
     return { ...data, email: authUser.user?.email || "" };

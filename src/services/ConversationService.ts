@@ -194,10 +194,19 @@ export class ConversationService {
 
     const isParticipant = conversation.user_id === userId;
     const isAssignedVolunteer = conversation.volunteer_id === userId;
-    const isPrivileged = ['moderador', 'administrador'].includes(role);
+    const isAdmin = role === 'administrador';
 
-    if (!isParticipant && !isAssignedVolunteer && !isPrivileged) {
+    if (!isParticipant && !isAssignedVolunteer && !isAdmin) {
       throw new AppError('Você não tem permissão para acessar este atendimento.', 403);
+    }
+
+    // Conversas encerradas: somente administrador pode acessar para auditoria.
+    // Moderadores não entram como privilegiados neste fluxo; apenas participantes
+    // do atendimento ou o admin responsável pela auditoria podem ver o histórico.
+    const isEnded = ['encerrada', 'arquivada'].includes(conversation.status);
+    const isTeamChat = conversation.is_team_chat === true;
+    if (isEnded && !isTeamChat && !isAdmin) {
+      throw new AppError('Este atendimento foi encerrado e não está mais disponível.', 403);
     }
 
     // Gap #3 — busca nome do voluntário para exibição no frontend
@@ -252,8 +261,7 @@ export class ConversationService {
     }
     const canSend =
       conversation.user_id === senderId ||
-      conversation.volunteer_id === senderId ||
-      ['moderador', 'administrador'].includes(role);
+      conversation.volunteer_id === senderId;
     if (!canSend) {
       throw new AppError('Você não participa deste atendimento.', 403);
     }
@@ -309,8 +317,7 @@ export class ConversationService {
     }
     const canClose =
       conversation.user_id === userId ||
-      conversation.volunteer_id === userId ||
-      ['moderador', 'administrador'].includes(role);
+      conversation.volunteer_id === userId;
     if (!canClose) {
       throw new AppError('Você não participa deste atendimento.', 403);
     }
@@ -477,6 +484,10 @@ export class ConversationService {
   }
 
   static async history(userId: string, role: string, page: number, limit: number) {
+    if (role === 'moderador') {
+      return { items: [], page, limit, total: 0 };
+    }
+
     const from = (page - 1) * limit;
     const to = from + limit - 1;
     let query = supabaseAdmin
@@ -486,10 +497,12 @@ export class ConversationService {
       })
       .eq('is_team_chat', false);
 
-    if (!['moderador', 'administrador'].includes(role)) {
+    if (role !== 'administrador') {
       query = role === 'voluntario'
         ? query.eq('volunteer_id', userId)
         : query.eq('user_id', userId);
+      // Usuários comuns e voluntários não veem atendimentos encerrados
+      query = query.not('status', 'in', '("encerrada","arquivada")');
     }
 
     const { data, error, count } = await query

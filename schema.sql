@@ -106,7 +106,7 @@ CREATE TABLE public.conversations (
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 CREATE INDEX idx_conversations_queue ON public.conversations(status, created_at) WHERE status = 'aguardando';
 CREATE UNIQUE INDEX uq_conversations_open_per_user ON public.conversations(user_id)
-  WHERE status IN ('aguardando', 'ativa', 'sinalizada');
+  WHERE status IN ('aguardando', 'ativa', 'sinalizada') AND (is_team_chat IS NOT TRUE);
 CREATE INDEX idx_conversations_volunteer_history ON public.conversations(volunteer_id, created_at DESC)
   WHERE volunteer_id IS NOT NULL;
 

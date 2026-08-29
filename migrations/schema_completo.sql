@@ -301,7 +301,7 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_conversations_open_per_user
   ON public.conversations(user_id)
-  WHERE status IN ('aguardando', 'ativa', 'sinalizada');
+  WHERE status IN ('aguardando', 'ativa', 'sinalizada') AND (is_team_chat IS NOT TRUE);
 
 CREATE INDEX IF NOT EXISTS idx_conversations_queue
   ON public.conversations(status, created_at)

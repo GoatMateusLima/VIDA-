@@ -3,10 +3,9 @@
 
 BEGIN;
 
--- Impede mais de um atendimento aberto por usuario.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_conversations_open_per_user
   ON public.conversations(user_id)
-  WHERE status IN ('aguardando', 'ativa', 'sinalizada');
+  WHERE status IN ('aguardando', 'ativa', 'sinalizada') AND (is_team_chat IS NOT TRUE);
 
 CREATE INDEX IF NOT EXISTS idx_conversations_volunteer_history
   ON public.conversations(volunteer_id, created_at DESC)

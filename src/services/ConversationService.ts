@@ -157,6 +157,16 @@ export class ConversationService {
       .single();
 
     if (error) {
+      // Race condition: dois requests simultâneos — retorna o que já existe
+      if (error.code === '23505') {
+        const { data: race } = await supabaseAdmin
+          .from('conversations')
+          .select('*')
+          .eq('is_team_chat', true)
+          .or(`and(user_id.eq.${user1Id},volunteer_id.eq.${user2Id}),and(user_id.eq.${user2Id},volunteer_id.eq.${user1Id})`)
+          .maybeSingle();
+        if (race) return race;
+      }
       throw new AppError('Erro ao iniciar chat privado de equipe: ' + error.message, 400);
     }
 

@@ -385,8 +385,10 @@ export class VolunteerService {
   ) {
     const { data, error } = await supabaseAdmin
       .from("volunteer_profiles")
-      .update({ availability_status: status })
-      .eq("user_id", volunteerId)
+      .upsert({
+        user_id: volunteerId,
+        availability_status: status
+      })
       .select()
       .single();
 

@@ -325,8 +325,12 @@ export class UserService {
 function clientWithToken(token: string) {
   const { env } = require("../config/env");
   const { createClient } = require("@supabase/supabase-js");
+  const WebSocket = require("ws");
   return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: { persistSession: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
+    realtime: {
+      transport: WebSocket,
+    },
   });
 }

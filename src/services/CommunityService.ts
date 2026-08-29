@@ -115,6 +115,27 @@ export class CommunityService {
       .select('id, name, description, status, rules_json, created_at')
       .single();
     if (error) throw new AppError('Erro ao criar grupo.', 400);
+
+    // Auto-associar todos os moderadores e administradores à nova comunidade
+    const { data: staffUsers } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name')
+      .in('role', ['moderador', 'administrador'])
+      .eq('status', 'ativo');
+
+    if (staffUsers && staffUsers.length > 0) {
+      const memberships = staffUsers.map((u) => ({
+        community_id: data.id,
+        user_id: u.id,
+        alias: u.display_name?.trim() || createAlias(),
+        role: 'membro',
+        status: 'ativo',
+      }));
+      await supabaseAdmin
+        .from('community_members')
+        .upsert(memberships, { onConflict: 'community_id,user_id' });
+    }
+
     await AuditService.record(actorId, 'community.created', 'community', data.id, {
       name: data.name,
     });

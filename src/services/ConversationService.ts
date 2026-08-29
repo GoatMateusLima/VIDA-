@@ -200,6 +200,14 @@ export class ConversationService {
       throw new AppError('Você não tem permissão para acessar este atendimento.', 403);
     }
 
+    // Conversas encerradas: somente admin pode acessar (auditoria)
+    // Exceção: team chats encerrados continuam acessíveis aos participantes
+    const isEnded = ['encerrada', 'arquivada'].includes(conversation.status);
+    const isTeamChat = conversation.is_team_chat === true;
+    if (isEnded && !isTeamChat && !['administrador'].includes(role)) {
+      throw new AppError('Este atendimento foi encerrado e não está mais disponível.', 403);
+    }
+
     // Gap #3 — busca nome do voluntário para exibição no frontend
     let volunteer_display_name: string | null = null;
     if (conversation.volunteer_id) {
@@ -490,6 +498,8 @@ export class ConversationService {
       query = role === 'voluntario'
         ? query.eq('volunteer_id', userId)
         : query.eq('user_id', userId);
+      // Usuários comuns e voluntários não veem atendimentos encerrados
+      query = query.not('status', 'in', '("encerrada","arquivada")');
     }
 
     const { data, error, count } = await query

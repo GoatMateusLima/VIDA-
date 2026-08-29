@@ -50,7 +50,7 @@ export async function requireAuth(
     // 3. Busca o cargo (role) do usuário na nossa tabela pública usando supabaseAdmin (ignora RLS)
     let { data: dbUser, error: dbError } = await supabaseAdmin
       .from('users')
-      .select('role, display_name')
+      .select('role, display_name, status')
       .eq('id', user.id)
       .single();
 
@@ -77,6 +77,10 @@ export async function requireAuth(
 
     if (dbUser?.role === 'anonimo') {
       throw new AppError('Crie uma conta para continuar.', 403);
+    }
+
+    if (dbUser?.status === 'banido') {
+      throw new AppError('Sua conta foi suspensa. Entre em contato com o suporte.', 403);
     }
 
     // 4. Injeta os dados do usuário em req.user para uso nos controllers

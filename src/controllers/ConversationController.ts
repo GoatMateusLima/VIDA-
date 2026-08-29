@@ -7,6 +7,7 @@ import { AuthenticatedRequest } from '../types';
 
 export class ConversationController {
   // Usuário cria atendimento (entra na fila)
+  // Moderadores/admins podem usar targetUserId para solicitar acolhimento em nome de outro usuário
   static async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       if (!req.user) {
@@ -14,10 +15,21 @@ export class ConversationController {
         return;
       }
 
-      const data = await ConversationService.create(req.user.id);
+      let targetUserId = req.user.id;
+
+      // Moderador/admin pode solicitar acolhimento para outro usuário
+      if (req.body?.targetUserId) {
+        if (!['moderador', 'administrador'].includes(req.user.role)) {
+          res.status(403).json({ status: 'error', message: 'Apenas moderadores e administradores podem solicitar acolhimento para outro usuário.' });
+          return;
+        }
+        targetUserId = req.body.targetUserId;
+      }
+
+      const data = await ConversationService.create(targetUserId);
       res.status(201).json({
         status: 'success',
-        message: 'Você entrou na fila de atendimento. Um voluntário irá acolher você em breve.',
+        message: 'Atendimento solicitado. Um voluntário irá acolher em breve.',
         data,
       });
     } catch (error) {

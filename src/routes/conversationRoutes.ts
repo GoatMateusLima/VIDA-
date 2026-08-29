@@ -43,6 +43,7 @@ router.get('/volunteer/dashboard',
 );
 
 // ─── Rotas do Usuário ─────────────────────────────────────────────────────────
+router.post('/team', requireAuth, requireRoles('voluntario', 'moderador', 'administrador'), ConversationController.createTeamChat);
 router.post('/', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.create);
 router.get('/', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.history);
 router.get('/:id/events', requireAuth, requireRoles('cadastrado', 'voluntario', 'moderador', 'administrador'), ConversationController.events);

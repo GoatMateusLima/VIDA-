@@ -27,6 +27,32 @@ import { AuthenticatedRequest } from "../types";
 import { hashPrivateValue } from "../utils/helpers";
 
 export class UserController {
+  static async listSafeUsers(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const data = await UserService.listSafeUsers();
+      res.status(200).json({ status: "success", data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async listTeamUsers(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const data = await UserService.listTeamUsers();
+      res.status(200).json({ status: "success", data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async listUsers(
     req: AuthenticatedRequest,
     res: Response,

@@ -25,6 +25,29 @@ export class ConversationController {
     }
   }
 
+  // Inicia ou recupera um chat de equipe
+  static async createTeamChat(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        res.status(401).json({ status: 'error', message: 'Não autenticado' });
+        return;
+      }
+
+      const { recipientId } = z.object({
+        recipientId: z.string().uuid("ID de destinatário inválido"),
+      }).parse(req.body);
+
+      const data = await ConversationService.createTeamChat(req.user.id, recipientId);
+      res.status(201).json({
+        status: 'success',
+        message: 'Chat de equipe iniciado com sucesso.',
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Consultar detalhes de um atendimento específico
   static async getById(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {

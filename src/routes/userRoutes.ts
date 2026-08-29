@@ -45,6 +45,18 @@ router.patch(
   requireRoles("administrador"),
   UserController.updateRole,
 );
+router.post(
+  "/admin/:id/ban",
+  requireAuth,
+  requireRoles("administrador"),
+  UserController.banUser,
+);
+router.get(
+  "/admin/:id",
+  requireAuth,
+  requireRoles("administrador"),
+  UserController.getUserDetails,
+);
 
 router.get("/me", requireAuth, UserController.me); // Dados completos do usuário
 router.patch("/me/preferences", requireAuth, UserController.updatePreferences); // Atualiza perfil
